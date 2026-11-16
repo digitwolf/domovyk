@@ -1,0 +1,282 @@
+# Guard_Hook corpus: expect<TAB>agent_type (- for none)<TAB>command (18.1-18.4).
+# A command spanning lines is written with a literal \n escape.
+deny	-	sudo apt update
+deny	-	echo start && sudo ls
+deny	-	ls; sudo id
+deny	-	true || sudo id
+deny	-	ls | sudo tee /etc/x
+deny	-	env FOO=1 sudo ls
+deny	-	FOO=bar sudo ls
+deny	-	xargs sudo rm
+deny	-	timeout 5 sudo ls
+deny	-	nice -n 5 nohup sudo ls
+deny	-	bash -c "sudo reboot"
+deny	-	sh -c 'sudo id'
+deny	-	echo "$(sudo cat /etc/shadow)"
+deny	-	ls `sudo id`
+deny	-	cat <(sudo ls)
+deny	-	( sudo ls )
+deny	-	{ sudo ls; }
+deny	-	eval "sudo ls"
+deny	-	exec sudo ls
+deny	-	ssh host sudo reboot
+deny	-	pkexec apt update
+deny	-	echo start && pkexec ls
+deny	-	ls; pkexec id
+deny	-	true || pkexec id
+deny	-	ls | pkexec tee /etc/x
+deny	-	env FOO=1 pkexec ls
+deny	-	FOO=bar pkexec ls
+deny	-	xargs pkexec rm
+deny	-	timeout 5 pkexec ls
+deny	-	nice -n 5 nohup pkexec ls
+deny	-	bash -c "pkexec reboot"
+deny	-	sh -c 'pkexec id'
+deny	-	echo "$(pkexec cat /etc/shadow)"
+deny	-	ls `pkexec id`
+deny	-	cat <(pkexec ls)
+deny	-	( pkexec ls )
+deny	-	{ pkexec ls; }
+deny	-	eval "pkexec ls"
+deny	-	exec pkexec ls
+deny	-	ssh host pkexec reboot
+deny	-	su -c apt update
+deny	-	echo start && su -c ls
+deny	-	ls; su -c id
+deny	-	true || su -c id
+deny	-	ls | su -c tee /etc/x
+deny	-	env FOO=1 su -c ls
+deny	-	FOO=bar su -c ls
+deny	-	xargs su -c rm
+deny	-	timeout 5 su -c ls
+deny	-	nice -n 5 nohup su -c ls
+deny	-	bash -c "su -c reboot"
+deny	-	sh -c 'su -c id'
+deny	-	echo "$(su -c cat /etc/shadow)"
+deny	-	ls `su -c id`
+deny	-	cat <(su -c ls)
+deny	-	( su -c ls )
+deny	-	{ su -c ls; }
+deny	-	eval "su -c ls"
+deny	-	exec su -c ls
+deny	-	ssh host su -c reboot
+deny	-	doas apt update
+deny	-	echo start && doas ls
+deny	-	ls; doas id
+deny	-	true || doas id
+deny	-	ls | doas tee /etc/x
+deny	-	env FOO=1 doas ls
+deny	-	FOO=bar doas ls
+deny	-	xargs doas rm
+deny	-	timeout 5 doas ls
+deny	-	nice -n 5 nohup doas ls
+deny	-	bash -c "doas reboot"
+deny	-	sh -c 'doas id'
+deny	-	echo "$(doas cat /etc/shadow)"
+deny	-	ls `doas id`
+deny	-	cat <(doas ls)
+deny	-	( doas ls )
+deny	-	{ doas ls; }
+deny	-	eval "doas ls"
+deny	-	exec doas ls
+deny	-	ssh host doas reboot
+deny	-	run0 apt update
+deny	-	echo start && run0 ls
+deny	-	ls; run0 id
+deny	-	true || run0 id
+deny	-	ls | run0 tee /etc/x
+deny	-	env FOO=1 run0 ls
+deny	-	FOO=bar run0 ls
+deny	-	xargs run0 rm
+deny	-	timeout 5 run0 ls
+deny	-	nice -n 5 nohup run0 ls
+deny	-	bash -c "run0 reboot"
+deny	-	sh -c 'run0 id'
+deny	-	echo "$(run0 cat /etc/shadow)"
+deny	-	ls `run0 id`
+deny	-	cat <(run0 ls)
+deny	-	( run0 ls )
+deny	-	{ run0 ls; }
+deny	-	eval "run0 ls"
+deny	-	exec run0 ls
+deny	-	ssh host run0 reboot
+deny	-	/usr/bin/sudo apt update
+deny	-	echo start && /usr/bin/sudo ls
+deny	-	ls; /usr/bin/sudo id
+deny	-	true || /usr/bin/sudo id
+deny	-	ls | /usr/bin/sudo tee /etc/x
+deny	-	env FOO=1 /usr/bin/sudo ls
+deny	-	FOO=bar /usr/bin/sudo ls
+deny	-	xargs /usr/bin/sudo rm
+deny	-	timeout 5 /usr/bin/sudo ls
+deny	-	nice -n 5 nohup /usr/bin/sudo ls
+deny	-	bash -c "/usr/bin/sudo reboot"
+deny	-	sh -c '/usr/bin/sudo id'
+deny	-	echo "$(/usr/bin/sudo cat /etc/shadow)"
+deny	-	ls `/usr/bin/sudo id`
+deny	-	cat <(/usr/bin/sudo ls)
+deny	-	( /usr/bin/sudo ls )
+deny	-	{ /usr/bin/sudo ls; }
+deny	-	eval "/usr/bin/sudo ls"
+deny	-	exec /usr/bin/sudo ls
+deny	-	ssh host /usr/bin/sudo reboot
+deny	-	\sudo apt update
+deny	-	echo start && \sudo ls
+deny	-	ls; \sudo id
+deny	-	true || \sudo id
+deny	-	ls | \sudo tee /etc/x
+deny	-	env FOO=1 \sudo ls
+deny	-	FOO=bar \sudo ls
+deny	-	xargs \sudo rm
+deny	-	timeout 5 \sudo ls
+deny	-	nice -n 5 nohup \sudo ls
+deny	-	bash -c "\sudo reboot"
+deny	-	sh -c '\sudo id'
+deny	-	echo "$(\sudo cat /etc/shadow)"
+deny	-	ls `\sudo id`
+deny	-	cat <(\sudo ls)
+deny	-	( \sudo ls )
+deny	-	{ \sudo ls; }
+deny	-	eval "\sudo ls"
+deny	-	exec \sudo ls
+deny	-	ssh host \sudo reboot
+deny	-	sudoedit apt update
+deny	-	echo start && sudoedit ls
+deny	-	ls; sudoedit id
+deny	-	true || sudoedit id
+deny	-	ls | sudoedit tee /etc/x
+deny	-	env FOO=1 sudoedit ls
+deny	-	FOO=bar sudoedit ls
+deny	-	xargs sudoedit rm
+deny	-	timeout 5 sudoedit ls
+deny	-	nice -n 5 nohup sudoedit ls
+deny	-	bash -c "sudoedit reboot"
+deny	-	sh -c 'sudoedit id'
+deny	-	echo "$(sudoedit cat /etc/shadow)"
+deny	-	ls `sudoedit id`
+deny	-	cat <(sudoedit ls)
+deny	-	( sudoedit ls )
+deny	-	{ sudoedit ls; }
+deny	-	eval "sudoedit ls"
+deny	-	exec sudoedit ls
+deny	-	ssh host sudoedit reboot
+deny	-	systemd-run ls
+deny	-	machinectl shell root@
+deny	-	find . -exec sudo rm {} \;
+deny	-	bash -lc 'sudo ls'
+deny	-	bash -c 'bash -c "sudo ls"'
+deny	-	stdbuf -o0 sudo ls
+deny	-	command sudo ls
+deny	-	builtin exec sudo ls
+deny	-	ls\nsudo ls
+deny	-	dd if=/dev/zero of=/dev/sda bs=1M
+deny	-	dd of=/dev/nvme0n1 if=img
+deny	-	mkfs.ext4 /dev/sdb1
+deny	-	mkfs -t vfat /dev/sdc
+deny	-	mkswap /dev/sda2
+deny	-	wipefs -a /dev/sda
+deny	-	blkdiscard /dev/nvme0n1
+deny	-	sgdisk --zap-all /dev/sda
+deny	-	sfdisk /dev/sda < t
+deny	-	parted /dev/sda mklabel gpt
+deny	-	fdisk /dev/sda
+deny	-	cryptsetup luksFormat /dev/sda2
+deny	-	shred -n 3 /dev/sda
+deny	-	rm -rf /
+deny	-	rm -rf /*
+deny	-	rm -fr ~
+deny	-	rm -rf ~/
+deny	-	rm -rf ~/*
+deny	-	rm -Rf $HOME
+deny	-	rm -r -f ${HOME}/
+deny	-	rm --recursive --force /etc
+deny	-	rm -rf /usr
+deny	-	rm -rf /home/someone
+deny	-	rm -rf /var
+deny	-	rm -rf -- /boot
+deny	-	find ~ -name '*.log' -delete
+deny	-	find / -name x -exec rm {} \;
+deny	-	find $HOME -type f -delete
+deny	-	chmod -R 777 /
+deny	-	chown -R nobody ~
+deny	-	chgrp -R users /etc
+deny	-	chmod -R a-w $HOME
+deny	-	echo x > /dev/sda
+deny	-	cat img > /dev/nvme0n1
+deny	-	tee /dev/mmcblk0 < img
+deny	-	cmd &>/dev/sda
+deny	-	dd if=img of=/dev/mapper/vg-root
+deny	-	:(){ :|:& };:
+deny	-	bash -c 'rm -rf ~'
+deny	-	timeout 9 rm -rf /
+allow	-	ls -la
+allow	-	echo sudo
+allow	-	echo 'sudo is not run here'
+allow	-	grep -r sudo /etc/sudoers.d
+allow	-	man sudo
+allow	-	command -v sudo
+allow	-	type sudo
+allow	-	which pkexec
+allow	-	apt-cache policy sudo
+allow	-	dpkg -L sudo
+allow	-	rm -rf ./build
+allow	-	rm -rf build/
+allow	-	rm -rf ~/Downloads/old-iso
+allow	-	rm -rf /tmp/domovyk-test
+allow	-	rm file.txt
+allow	-	rm -f ~/.cache/x
+allow	-	find . -delete
+allow	-	find ~/tmp -name '*.o' -delete
+allow	-	find /var/log -name '*.gz'
+allow	-	chmod -R u+w ./src
+allow	-	chmod 600 ~/.ssh/config
+allow	-	chown -R me ./dir
+allow	-	dd if=/dev/zero of=./disk.img bs=1M count=10
+allow	-	cat /dev/null > out.txt
+allow	-	ls 2>&1 | grep x
+allow	-	make &>/dev/null
+allow	-	diff <(ls a) <(ls b)
+allow	-	journalctl -b -p err
+allow	-	systemctl --failed
+allow	-	systemd-run --user --scope ls
+allow	-	git status
+allow	-	domovyk status
+allow	-	domovyk handoff create --title 'update' < script.sh
+allow	-	bash -c 'ls -la'
+allow	-	sh -c 'echo hi'
+allow	-	echo $(date)
+allow	-	ls `pwd`
+allow	-	env FOO=1 ls
+allow	-	xargs grep foo
+allow	-	timeout 5 ls
+allow	-	ssh host uptime
+allow	-	eval "echo hi"
+allow	-	export SUDO_ASKPASS=x
+allow	-	lsblk
+allow	-	df -h
+allow	-	du -sh ~
+allow	-	cat /etc/os-release
+allow	-	python3 -c 'print(1)'
+allow	-	jq . file.json
+allow	-	mkdir -p ~/x
+allow	-	cp -r a b
+allow	-	tar czf backup.tgz ~/Documents
+allow	domovyk:domovyk-investigator	domovyk commands
+allow	domovyk:domovyk-investigator	domovyk commands --json
+allow	domovyk:domovyk-investigator	domovyk commands --json | jq '.commands | length'
+allow	domovyk:domovyk-investigator	domovyk version | head -n 1
+deny	domovyk:domovyk-investigator	domovyk --help
+deny	domovyk:domovyk-investigator	cat /etc/passwd
+deny	domovyk:domovyk-investigator	ls ~
+deny	domovyk:domovyk-investigator	domovyk handoff create --title x
+deny	domovyk:domovyk-investigator	domovyk setup claude
+deny	domovyk:domovyk-investigator	domovyk commands > /tmp/out
+deny	domovyk:domovyk-investigator	jq . /etc/passwd
+deny	domovyk:domovyk-investigator	domovyk commands; rm x
+deny	domovyk:domovyk-investigator	echo hi
+deny	domovyk:domovyk-investigator	domovyk agent
+deny	domovyk:domovyk-investigator	sudo domovyk commands
+deny	domovyk:domovyk-investigator	domovyk unsetup
+deny	domovyk:domovyk-investigator	grep x file
+allow	Explore	cat /etc/passwd
+deny	Explore	sudo ls

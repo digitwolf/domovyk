@@ -1,0 +1,4 @@
+#!/bin/bash
+# Guard_Hook entry point (design.md, Guard_Hook): reads the PreToolUse JSON.
+here=$(dirname -- "$(readlink -f -- "$0")")
+exec python3 -I "$here/../py/guard.py"
