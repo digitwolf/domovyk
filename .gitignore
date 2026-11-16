@@ -1,0 +1,7 @@
+# local build and test output
+/build/
+/.cache/
+*.deb
+*.buildinfo
+*.changes
+__pycache__/
