@@ -454,7 +454,7 @@ Ported from Motanka at `d076748`:
 - `test/vm/lib.sh`, `image`, `up`, `down`, `run`, `push`, `fingerprint`, with the prefix renamed `MV_` → `DV_` and `MOTANKA_VM_` → `DOMOVYK_VM_`;
 - the cache moved to `~/.cache/domovyk-vm/`;
 - the Arch parity VM, the `kde` and `multiuser` variants and the Motanka-specific guards dropped;
-- a `gnome` variant (`ubuntu-desktop-minimal`, apport enabled, `systemd-coredump` absent) added;
+- the `gnome-snaps` variant kept, identical to Motanka's (GNOME desktop with snaps), so base images are interchangeable;
 - `DOMOVYK_VM_IMAGE_DIR` added to reuse Motanka's verified base images;
 - an emulated NVMe disk (`-device nvme`) so UDisks2 reports SMART data in tests.
 
@@ -508,7 +508,7 @@ Ported from Motanka at `d076748`:
 | 20.8 | Unsetup reverses what the ledger holds. Reversing a step that never ran is a no-op. |
 | 21.6 / 21.7 | Exit 1 with the next step. |
 | 22.5 | `prerm` prints the users and the command. Exit 0. Removal continues. |
-| 23.2 | `test/vm/lib.sh` `dv_require_vm` exits 1 before any change. |
+| 23.2 | `test/vm/lib.sh` `dv_require_guest` exits 1 before any change. |
 
 ## Testing Strategy
 
@@ -525,12 +525,12 @@ Ported from Motanka at `d076748`:
   - Guard_Hook: for random compositions of allowed commands with `;`, `&&`, `|`, `$(…)` and `bash -c`, adding a `sudo` anywhere flips the decision to deny (18.1), and removing it restores no-decision (18.3).
   - Setup/Unsetup JSON round-trip: random valid `settings.json` documents are equal as JSON after Setup then Unsetup (20.5), run with a fake `claude` on PATH.
 - **VM tests (`test/vm/tests/`, 26.04 and 24.04):**
-  - `read-tier.sh`: install the .deb, take a Fingerprint, run every Read_Command with and without `--json` on `fresh` and `gnome`, take a second Fingerprint, and compare them (1.1, 3.1, 3.4). With the network namespace cut (`unshare -n`), every Read_Command still passes (3.2).
-  - `crash.sh` (`gnome`): `sleep 300 & kill -SEGV $!`. Then `crash list` shows it, `crash info` and `crash backtrace` work, the temp directory is gone after success and after `kill -INT` mid-run (10.x). The same test is repeated with `systemd-coredump` installed (10.2).
+  - `read-tier.sh`: install the .deb, take a Fingerprint, run every Read_Command with and without `--json` on `fresh` and `gnome-snaps`, take a second Fingerprint, and compare them (1.1, 3.1, 3.4). With the network namespace cut (`unshare -n`), every Read_Command still passes (3.2).
+  - `crash.sh` (`gnome-snaps`): `sleep 300 & kill -SEGV $!`. Then `crash list` shows it, `crash info` and `crash backtrace` work, the temp directory is gone after success and after `kill -INT` mid-run (10.x). The same test is repeated with `systemd-coredump` installed (10.2).
   - `setup.sh`: install Claude Code with its native installer in the VM, run Setup twice, check the ledger and settings, run `claude plugin details domovyk`, then Unsetup and compare (17.2, 20.x). Also cases for an interrupted Setup and a removed Package.
   - `package.sh`: build in the VM, `lintian`, install, purge, Fingerprint equality (22.x).
   - `guard-latency.sh`: 1,000 guard runs, p95 < 100 ms (18.6).
-- **Manual check (documented, not automated):** a real Agent_Session in a `gnome` VM with the owner signed in to Claude Code. Confirm that the skills load, the Context_Hook output appears, `sudo` is denied with the handoff reason, and `domovyk agent crash` opens with the crash prompt (17.2, 19.1, 21.2–21.4).
+- **Manual check (documented, not automated):** a real Agent_Session in a `gnome-snaps` VM with the owner signed in to Claude Code. Confirm that the skills load, the Context_Hook output appears, `sudo` is denied with the handoff reason, and `domovyk agent crash` opens with the crash prompt (17.2, 19.1, 21.2–21.4).
 
 ## Requirements Coverage
 
@@ -557,7 +557,7 @@ Ported from Motanka at `d076748`:
 
 Each spike runs in a Test_VM and writes its result here, then updates the affected section.
 
-- **S1 Claude Code plugin mechanics (26.04 `gnome`):**
+- **S1 Claude Code plugin mechanics (26.04 `gnome-snaps`):**
   - Do `claude plugin validate`, `marketplace add <abs path>`, `install --scope user`, `list`, `details` and `uninstall` work without signing in?
   - Which keys do they write to `~/.claude/settings.json` and which other files?
   - What exact `agent_type` does a plugin subagent carry in PreToolUse input?
@@ -565,7 +565,7 @@ Each spike runs in a Test_VM and writes its result here, then updates the affect
   - Does `Bash(domovyk status *)` also match `domovyk status` with no arguments?
   - Is there a machine-readable `claude plugin list` form?
   - What is the minimum Claude Code version the Plugin needs?
-- **S2 Crash sources (26.04 and 24.04 `gnome`):**
+- **S2 Crash sources (26.04 and 24.04 `gnome-snaps`):**
   - Is apport enabled on the image?
   - What does `/var/crash` contain after `kill -SEGV`, with and without `systemd-coredump`?
   - Does `apport-coredump-hook@.service` still write `.crash` files?

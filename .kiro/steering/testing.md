@@ -28,11 +28,11 @@ The development host is the owner's daily-use Ubuntu 26.04 laptop, with encrypte
 - **Secondary:** Ubuntu 24.04 LTS (`noble`) cloud image, for release-specific tests.
 - Base image variants:
   - `fresh`: the server cloud image;
-  - `gnome`: `ubuntu-desktop-minimal` with snaps, for the launcher and crash tests.
+  - `gnome-snaps`: the GNOME desktop with snaps, identical to Motanka's variant, for the launcher and crash tests.
 - VMs are started with `qemu-system-x86_64 -enable-kvm` as the current user, with user-mode networking, SSH forwarded to a local port, and cloud-init seeded over NoCloud HTTP.
 - Each test starts from a copy-on-write overlay of a base image and deletes the overlay afterwards.
 - The repo is copied into the VM (rsync over SSH). The VM never mounts the host home folder.
-- Base images may be shared read-only with Motanka's harness: set `DOMOVYK_VM_IMAGE_DIR=~/.cache/motanka-vm/images`.
+- Base images may be shared read-only with Motanka's harness: set `DOMOVYK_VM_IMAGE_DIR=~/.cache/motanka-vm/base`.
 
 ## Commands (under `test/vm/`, ported from Motanka at commit `d076748`)
 

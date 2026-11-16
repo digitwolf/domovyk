@@ -9,10 +9,10 @@ Rules for every task:
 - [ ] 1. VM test harness
 - [ ] 1.1 Port the harness core from Motanka `d076748`
   - Copy `test/vm/{lib.sh,up,down,run,push}`. Rename `MV_`→`DV_` and `MOTANKA_VM_`→`DOMOVYK_VM_`, move the cache to `~/.cache/domovyk-vm/`, and drop the Arch parity, `kde` and `multiuser` code and the Motanka guards.
-  - Add `dv_require_vm` (exit 1 when `systemd-detect-virt` prints `none`) and `DOMOVYK_VM_IMAGE_DIR`.
+  - Add `dv_require_guest` (exit 1 when `systemd-detect-virt` prints `none`) and `DOMOVYK_VM_IMAGE_DIR`.
   - _Requirements: 23.1, 23.2, 23.3_
-- [ ] 1.2 Images: `resolute` and `noble`, variants `fresh` and `gnome`
-  - Port `test/vm/image`. Add the `gnome` provisioning (`ubuntu-desktop-minimal`, apport enabled) and an emulated NVMe data disk in `lib.sh`.
+- [ ] 1.2 Images: `resolute` and `noble`, variants `fresh` and `gnome-snaps`
+  - Port `test/vm/image`. Keep `variants/gnome-snaps.sh` identical to Motanka's so base images are interchangeable; add an emulated NVMe data disk in `lib.sh`.
   - Builds and boots run in a 26.04 VM and a 24.04 VM.
   - _Requirements: 1.1, 23.3_
 - [ ] 1.3 Fingerprint
@@ -28,11 +28,11 @@ Rules for every task:
   - _Requirements: 23.1, 23.3_
 
 - [ ] 3. Feasibility spikes (each runs in a test VM and writes its result into `design.md`, Open Questions)
-- [ ] 3.1 S1: Claude Code plugin mechanics in a 26.04 `gnome` VM
+- [ ] 3.1 S1: Claude Code plugin mechanics in a 26.04 `gnome-snaps` VM
   - Install Claude Code with its native installer inside the VM. Answer every S1 question with a throwaway plugin under `spikes/s1/`.
   - Record the minimum Claude Code version, the permission-rule form and the `agent_type` value in `design.md`.
   - _Requirements: 17.1, 17.2, 18.4, 19.1, 20.1, 20.5, 21.7_
-- [ ] 3.2 S2: Crash sources in 26.04 and 24.04 `gnome` VMs
+- [ ] 3.2 S2: Crash sources in 26.04 and 24.04 `gnome-snaps` VMs
   - Inject `kill -SEGV`, with and without `systemd-coredump`. Record the `/var/crash` contents, the `coredumpctl` output, `apport-unpack` run as the user, and gdb with debuginfod.
   - Keep scripts in `spikes/s2/`.
   - _Requirements: 10.1, 10.2, 10.4, 10.7_
@@ -163,13 +163,13 @@ Rules for every task:
 
 - [ ] 18. VM integration tests
 - [ ] 18.1 Read tier on real systems
-  - Create `test/vm/tests/read-tier.sh`. On `fresh` and `gnome`, 26.04 and 24.04: run every Read_Command with and without `--json` and check the Fingerprint is unchanged. Repeat under `unshare -n`. Time each run against 30 s.
+  - Create `test/vm/tests/read-tier.sh`. On `fresh` and `gnome-snaps`, 26.04 and 24.04: run every Read_Command with and without `--json` and check the Fingerprint is unchanged. Repeat under `unshare -n`. Time each run against 30 s.
   - _Requirements: 1.1, 3.1, 3.2, 3.4, 4.1, 4.2_
 - [ ] 18.2 Crash end-to-end
-  - Create `test/vm/tests/crash.sh` on 26.04 and 24.04 `gnome`: SEGV injection, then list, info and backtrace, temp-directory cleanup after success and after SIGINT. Repeat with `systemd-coredump` installed.
+  - Create `test/vm/tests/crash.sh` on 26.04 and 24.04 `gnome-snaps`: SEGV injection, then list, info and backtrace, temp-directory cleanup after success and after SIGINT. Repeat with `systemd-coredump` installed.
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 - [ ] 18.3 Setup with real Claude Code
-  - Create `test/vm/tests/setup.sh` on 26.04 `gnome`: native Claude Code install, Setup twice, `claude plugin details domovyk` lists the Skills, the Investigator and the hooks, then Unsetup and compare the settings.
+  - Create `test/vm/tests/setup.sh` on 26.04 `gnome-snaps`: native Claude Code install, Setup twice, `claude plugin details domovyk` lists the Skills, the Investigator and the hooks, then Unsetup and compare the settings.
   - _Requirements: 17.2, 17.4, 20.1, 20.3, 20.4, 20.5_
 - [ ] 18.4 Guard latency
   - Create `test/vm/tests/guard-latency.sh`: 1,000 guard runs over the corpus in a 26.04 VM, p95 < 100 ms.
@@ -182,7 +182,7 @@ Rules for every task:
 - [ ] 20.1 README
   - Write `README.md`: what Domovyk is, install, `domovyk setup claude`, `domovyk agent`, privacy (what reaches the model, redaction, `--raw`), Unsetup before removal, and the phase 1 limits (handoffs only).
   - _Requirements: 15.3, 20.9, 22.5_
-- [ ] 20.2 Manual Agent_Session check in a 26.04 `gnome` VM
+- [ ] 20.2 Manual Agent_Session check in a 26.04 `gnome-snaps` VM
   - With the owner signed in to Claude Code inside the VM: the skills load, the Context_Hook output appears, `sudo` is denied with the handoff reason, and `domovyk agent crash` opens with the crash prompt. Record the result in `design.md`, Testing Strategy.
   - _Requirements: 17.2, 19.1, 21.2, 21.3, 21.4_
 - [ ]* 20.3 Man page and shell completions

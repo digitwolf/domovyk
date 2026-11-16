@@ -68,7 +68,7 @@ Out of scope for this spec:
 
 #### Acceptance Criteria
 
-1. WHEN the Package is installed on a Supported_Release THEN every Read_Command SHALL exit with code 0 on a fresh `fresh` and a fresh `gnome` Test_VM.
+1. WHEN the Package is installed on a Supported_Release THEN every Read_Command SHALL exit with code 0 on a fresh `fresh` and a fresh `gnome-snaps` Test_VM.
 2. THE CLI SHALL run every Read_Command as the invoking user without `sudo`, `pkexec` or setuid programs.
 3. IF a Source is an Unavailable_Source THEN THE Read_Command SHALL report that Source in its Fact_Output with the reason (`missing`, `permission`, `timeout`) and, for `missing`, the apt package that provides it.
 4. IF a Source is an Unavailable_Source THEN THE Read_Command SHALL still exit with code 0 and report every other Source.
