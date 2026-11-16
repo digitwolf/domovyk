@@ -458,6 +458,49 @@ Ported from Motanka at `d076748`:
 - `DOMOVYK_VM_IMAGE_DIR` added to reuse Motanka's verified base images;
 - an emulated NVMe disk (`-device nvme`) so UDisks2 reports SMART data in tests.
 
+Decisions made while porting (tasks 1.1–1.4):
+- **Also ported:** `collect-fingerprint.sh`, which `fingerprint` runs in the VM, plus `test/run-all`, `test/unit/run`, `.shellcheckrc` and the vendored bats (bats-core 1.14.0, bats-support 0.3.0, bats-assert 2.2.4, with their licenses).
+- **Dropped as Motanka-only:**
+  - build VMs (`MOTANKA_BUILD_VM_*`, `mv_up_build_vm`);
+  - the `debs/` and `keys/` caches;
+  - the virgl option (`MOTANKA_VM_GPU=gl`, render node);
+  - the Protected_Host marker check;
+  - `run-all`'s opt-in, GL-only and release-only test tables;
+  - every Motanka guest script except `collect-fingerprint.sh`.
+- **Kept:** `DOMOVYK_VM_GPU_ARGS` (default `-vga none -device virtio-vga -display none`), `DOMOVYK_VM_UPGRADE` (default 1: `up` runs `apt-get full-upgrade` so that an install on a stale image does not pull library updates a purge cannot undo; `run-all`'s unit VM sets 0), `DOMOVYK_VM_CPUS`, `_RAM`, `_DISK` and `_RESULTS`.
+- **Guest guard:** `dv_require_guest` runs `systemd-detect-virt --vm`, so a container on a bare-metal machine counts as `none`; an empty answer (no `systemd-detect-virt`) is refused too. `test/unit/run` uses it. `collect-fingerprint.sh` repeats the check, because it is fed on stdin and cannot source `lib.sh`. CI containers on GitHub's runners, which are VMs, should pass the guard: `--vm` looks through the container to the hypervisor. This is not checked yet.
+- **`DOMOVYK_VM_IMAGE_DIR`:** searched first and only read.
+  - `fresh` uses `ubuntu-<version>-server-cloudimg-amd64.img` only if its `.sha256` sits next to it, and checks the image against it on every use; a mismatch is an error, with no fallback to a download. `gnome-snaps` uses `<release>-gnome-snaps.qcow2` as it is.
+  - Images not found there are downloaded or built into `~/.cache/domovyk-vm/base/`, and `flock` lock files are only ever taken there.
+  - Overlays are created with `qemu-img create -u` (the base image is not opened), and QEMU opens the base with `backing.file.locking=off`. Checked against a running Motanka VM: our QEMU adds no OFD lock on the shared image.
+- **NVMe data disk:** every VM gets `vms/<name>/nvme.qcow2`, empty and 1 GiB, deleted with the VM. It is attached as `-device nvme,drive=nvme0,serial=domovyk-nvme0`. On 26.04 it is `/dev/nvme0n1` ("QEMU NVMe Ctrl"), and `udisksctl dump` shows `org.freedesktop.UDisks2.NVMe.Controller` with `SmartUpdated` and `SmartTemperature` set.
+- **Fingerprint (`collect-fingerprint.sh`, `tools/fpdiff.py`):**
+  - It collects the Glossary's Fingerprint:
+    - `packages.tsv`;
+    - tree files `etc.sha256`, `usr.sha256`, `var-lib.sha256` and `home-<user>.sha256`;
+    - `dconf-<user>.ini`;
+    - `units.txt`, from `list-unit-files` for the system and `--global`.
+  - It keeps Motanka's cheap extras: `manual.txt`, `snaps.txt`, `groups.txt` and `sysctl.txt`. Motanka's `sessions.txt` is dropped, because `/usr` covers it.
+  - `~/.claude/settings.json` is copied as `claude-settings-<user>.json` and compared as JSON. Differences are reported by path (`$.permissions.allow`), and canonical JSON keeps `true` and `1` apart. Its tree entry is still compared for type, mode and owner.
+  - Allowlist from the Glossary:
+    - `~/.cache` and `~/.claude/`;
+    - apt lists and caches, and dpkg's `/var/lib/dpkg/*-old` copies.
+  - Allowlist kept from Motanka:
+    - `/var/log` and the journals, which are not collected today;
+    - `/etc/{passwd,group,shadow,gshadow}-`;
+    - volatile sysctl keys;
+    - GDM's numbered greeter users in group member lists.
+  - `~/.claude.json` is not under `~/.claude/`, so it is compared, as the Glossary says. Tasks 14, 17.2 and 18.3 will see it change whenever `claude` runs, and need a decision then.
+  - A capture of a fresh 26.04 VM takes about 40 s (`/usr` has about 140,000 entries).
+- **Fingerprint noise:**
+  - Every SSH login runs the dynamic motd. Its landscape-sysinfo part rewrites `/var/lib/landscape/landscape-sysinfo.cache` at most once a minute, so any harness command changed the Fingerprint. The seed's vendor-data now removes `/etc/update-motd.d/50-landscape-sysinfo` at first boot, next to Motanka's apt-periodic, needrestart and fwupd defaults.
+  - After that, two captures of an idle 26.04 VM a minute apart, with SSH commands in between, are equal.
+  - Not handled yet, left for the owner because it widens the Glossary's Allowlist: on 24.04 `snapd` runs on the `fresh` image and rewrites `/var/lib/snapd/state.json` on its own, and two captures about two minutes apart differed in that file only. It will do the same on `gnome-snaps`. Installed snaps and their revisions are already in `snaps.txt`, so leaving `state.json` out would lose little.
+  - Not handled yet: timers that write under `/var/lib` on their own schedule, such as `fwupd-refresh.timer` (`/var/lib/fwupd`), `logrotate.timer` (`/var/lib/logrotate/status`) and `ua-timer.timer`. They did not fire in 10 minutes of observation. Tasks 17.2 and 18.1 should mask them in the test, or take both Fingerprints between runs.
+- **`test/run-all`:** stages `shellcheck` (host), `boot` (fresh, not upgraded), `unit` (push, then `test/unit/run`), `shfmt` (`shfmt -d -i 2 -ci` in the unit VM, installed there with apt if missing), `vm-<test>` and `teardown`. Logs go to `~/.cache/domovyk-vm/results/<run-id>/`.
+- **Name clash:** `test/vm/lib.sh` and `libexec/lib/domovyk.sh` both define `dv_init`, `dv_die` and `dv_usage`, so no script may source both.
+- **Unit tests as root:** `harness.bats` skips the tests that run real harness scripts when it runs as root, because the harness refuses root. CI runs the unit tests as root in containers.
+
 ## Data Models
 
 **Command_Metadata:** lines matching `^# domovyk:(summary|tier|args|examples)=(.*)$` in the first 15 lines.

@@ -7,19 +7,19 @@ Rules for every task:
 - No task runs `git push` or publishes to the apt repo.
 
 - [ ] 1. VM test harness
-- [ ] 1.1 Port the harness core from Motanka `d076748`
+- [x] 1.1 Port the harness core from Motanka `d076748`
   - Copy `test/vm/{lib.sh,up,down,run,push}`. Rename `MV_`→`DV_` and `MOTANKA_VM_`→`DOMOVYK_VM_`, move the cache to `~/.cache/domovyk-vm/`, and drop the Arch parity, `kde` and `multiuser` code and the Motanka guards.
   - Add `dv_require_guest` (exit 1 when `systemd-detect-virt` prints `none`) and `DOMOVYK_VM_IMAGE_DIR`.
   - _Requirements: 23.1, 23.2, 23.3_
-- [ ] 1.2 Images: `resolute` and `noble`, variants `fresh` and `gnome-snaps`
+- [x] 1.2 Images: `resolute` and `noble`, variants `fresh` and `gnome-snaps`
   - Port `test/vm/image`. Keep `variants/gnome-snaps.sh` identical to Motanka's so base images are interchangeable; add an emulated NVMe data disk in `lib.sh`.
   - Builds and boots run in a 26.04 VM and a 24.04 VM.
   - _Requirements: 1.1, 23.3_
-- [ ] 1.3 Fingerprint
+- [x] 1.3 Fingerprint
   - Port `test/vm/fingerprint` and `tools/fpdiff.py`. Cut the Allowlist down to the Glossary's Fingerprint exclusions (`~/.cache`, `~/.claude/` except `settings.json`, compared as JSON).
   - Add `test/unit/fpdiff.bats`.
   - _Requirements: 3.1, 22.4_
-- [ ] 1.4 Runner, lint and unit-test plumbing
+- [x] 1.4 Runner, lint and unit-test plumbing
   - Create `test/run-all` (`--release noble`), `.shellcheckrc`, and `test/unit/run`. Vendor `bats-core`, `bats-support` and `bats-assert` under `test/bats/`.
   - Add `test/unit/harness.bats`: the harness refuses outside a VM, and writes only under the repo and `~/.cache/domovyk-vm/`.
   - _Requirements: 23.1, 23.2, 23.3, 23.4_
