@@ -196,7 +196,11 @@ done | jq -Rn '[inputs | split("\t")
 # package counter is repeated on every CPU of the package, so it is counted
 # once per physical package. Without counters (AMD, VMs), count kernel log
 # lines of the current boot that mention throttling.
-cpus=("$(dv_path /sys/devices/system/cpu)"/cpu[0-9]*/thermal_throttle)
+cpus=()
+cpu_root=$(dv_path /sys/devices/system/cpu)
+for d in "$cpu_root"/cpu[0-9]*/thermal_throttle; do
+  [[ -d $d ]] && cpus+=("$d")
+done
 if ((${#cpus[@]})); then
   for d in "${cpus[@]}"; do
     c=${d%/thermal_throttle}
