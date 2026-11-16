@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Copy the repository (without .git and the git-ignored /.cache/ and
+# /build/) into a test VM at /home/tester/domovyk.
+# Ported from Motanka's test/vm/push at commit d076748.
+#
+# Usage: test/vm/push <name>
+#
+# Uses rsync over SSH and deletes files in the VM copy that are gone from the
+# repository. Falls back to tar over SSH if the VM has no rsync. No host
+# folder is ever shared into the VM.
+set -euo pipefail
+# shellcheck source=lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+DV_USAGE="test/vm/push <name>"
+dv_init
+
+if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+  printf 'usage: %s\n' "$DV_USAGE"
+  exit 0
+fi
+if (($# != 1)); then
+  dv_usage
+fi
+name=$1
+dv_require_running "$name"
+dv_ssh_args "$name"
+
+if "${DV_SSH[@]}" 'command -v rsync >/dev/null' </dev/null; then
+  dv_need rsync
+  rsync -rlptD --delete --exclude=/.git --exclude=/.cache --exclude=/build \
+    -e "$(dv_rsync_rsh)" \
+    "$DV_REPO/" "$DV_SSH_DEST:$DV_GUEST_REPO/"
+else
+  dv_log "no rsync in $name; copying with tar"
+  tar -C "$DV_REPO" --exclude=./.git --exclude=./.cache --exclude=./build -cf - . |
+    "${DV_SSH[@]}" "rm -rf $DV_GUEST_REPO && mkdir -p $DV_GUEST_REPO && tar -C $DV_GUEST_REPO -xf -"
+fi
+dv_log "pushed $DV_REPO to $name:$DV_GUEST_REPO"

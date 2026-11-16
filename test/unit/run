@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Run the shell unit tests (every test/unit/*.bats) with the bats-core
+# vendored under test/bats/. Arguments, if any, are passed to bats instead of
+# the test/unit folder, for example a single .bats file or --filter.
+# Ported from Motanka's test/unit/run at commit d076748.
+#
+# Meant to run inside a test VM (test/run-all does that). It refuses to run
+# where systemd-detect-virt reports no virtual machine (dv_require_guest).
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo=$(cd "$here/../.." && pwd)
+# shellcheck source=../vm/lib.sh
+source "$repo/test/vm/lib.sh"
+dv_require_guest
+
+if (($# == 0)); then
+  set -- "$here"
+fi
+exec "$repo/test/bats/core/bin/bats" --print-output-on-failure "$@"

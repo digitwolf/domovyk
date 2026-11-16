@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# Make sure a base image exists and print its path as the last line on stdout.
+# Ported from Motanka's test/vm/image at commit d076748.
+#
+# Usage: test/vm/image <resolute|noble> <fresh|gnome-snaps>
+#
+# If DOMOVYK_VM_IMAGE_DIR is set, the image is looked up there first and only
+# read (test/vm/lib.sh):
+#   fresh: ubuntu-<version>-server-cloudimg-amd64.img, used only if
+#     <image>.sha256 sits next to it (written by a harness that verified the
+#     image) and the image matches it;
+#   gnome-snaps: <release>-gnome-snaps.qcow2.
+# Otherwise, in ~/.cache/domovyk-vm/base/:
+#   fresh: the Ubuntu server cloud image, downloaded once and verified against
+#     SHA256SUMS, whose signature SHA256SUMS.gpg is checked with gpgv and the
+#     Ubuntu cloud image keyring;
+#   gnome-snaps: boot an overlay on the fresh image, run
+#     test/vm/variants/gnome-snaps.sh inside it with sudo, clean cloud-init
+#     state, shut down and convert the overlay into
+#     base/<release>-gnome-snaps.qcow2. The script is identical to Motanka's,
+#     so the two harnesses' gnome-snaps images are interchangeable.
+#
+# Base images are read-only (mode 0444). Delete one to rebuild it. Lock files
+# are taken in ~/.cache/domovyk-vm/base/ only.
+set -euo pipefail
+# shellcheck source=lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+DV_USAGE="test/vm/image <resolute|noble> <fresh|gnome-snaps>"
+dv_init
+
+CLOUD_IMAGE=""
+
+# Downloads with the Python standard library (python3 is on the host tool
+# list; curl is not). HTTPS only, certificates verified.
+FETCH_PY='import shutil, sys, urllib.request
+url, out = sys.argv[1], sys.argv[2]
+if not url.startswith("https://"):
+    sys.exit("refusing a non-HTTPS URL: " + url)
+with urllib.request.urlopen(url, timeout=60) as r:
+    if not r.geturl().startswith("https://"):
+        sys.exit("redirected to a non-HTTPS URL: " + r.geturl())
+    with open(out, "wb") as f:
+        shutil.copyfileobj(r, f, 1 << 20)'
+
+fetch() {
+  local url=$1 out=$2 attempt
+  for attempt in 1 2 3; do
+    if python3 -c "$FETCH_PY" "$url" "$out"; then
+      return 0
+    fi
+    dv_log "download failed (attempt $attempt of 3): $url"
+    sleep 5
+  done
+  dv_die "download failed: $url"
+}
+
+# shared_cloud_image <file name>: sets CLOUD_IMAGE to the verified cloud
+# image in DOMOVYK_VM_IMAGE_DIR, or returns 1 if there is none. Dies if the
+# image does not match its .sha256, so it must not run in a subshell.
+shared_cloud_image() {
+  local fname=$1 img expected actual
+  img=$(dv_shared_image "$fname") || return 1
+  if [[ ! -f $img.sha256 || ! -r $img.sha256 ]]; then
+    dv_log "ignoring $img: no $fname.sha256 next to it"
+    return 1
+  fi
+  expected=$(awk -v f="$fname" '$2 == "*" f || $2 == f { print $1; exit }' "$img.sha256")
+  if [[ ! $expected =~ ^[0-9a-f]{64}$ ]]; then
+    dv_die "$img.sha256 has no SHA-256 for $fname"
+  fi
+  actual=$(sha256sum "$img" | awk '{ print $1 }')
+  if [[ $actual != "$expected" ]]; then
+    dv_die "checksum mismatch for $img: expected $expected (from $fname.sha256), got $actual"
+  fi
+  CLOUD_IMAGE=$img
+}
+
+# cloud_image <release>: finds, or downloads and verifies, the cloud image
+# and sets CLOUD_IMAGE to its path.
+cloud_image() {
+  local release=$1 version fname url dest tmp expected actual lock
+  version=$(dv_release_version "$release")
+  fname="ubuntu-$version-server-cloudimg-amd64.img"
+  url="$DV_CLOUDIMG_URL/$release/release"
+  dest="$DV_BASE/$fname"
+
+  if shared_cloud_image "$fname"; then
+    dv_log "using $CLOUD_IMAGE (DOMOVYK_VM_IMAGE_DIR; matches its .sha256)"
+    return 0
+  fi
+
+  exec {lock}>"$DV_BASE/.$fname.lock"
+  flock "$lock"
+  if [[ ! -f $dest ]]; then
+    if [[ ! -r $DV_CLOUDIMG_KEYRING ]]; then
+      dv_die "$DV_CLOUDIMG_KEYRING is missing; it comes with the Ubuntu package ubuntu-cloudimage-keyring"
+    fi
+    tmp=$(mktemp -d "$DV_BASE/.download.XXXXXX")
+    DV_CLEANUP_PATHS+=("$tmp")
+
+    dv_log "downloading SHA256SUMS for $release ($version)"
+    fetch "$url/SHA256SUMS" "$tmp/SHA256SUMS"
+    fetch "$url/SHA256SUMS.gpg" "$tmp/SHA256SUMS.gpg"
+    mkdir -m 0700 "$tmp/gnupg"
+    if ! gpgv --homedir "$tmp/gnupg" --keyring "$DV_CLOUDIMG_KEYRING" \
+      "$tmp/SHA256SUMS.gpg" "$tmp/SHA256SUMS" >&2; then
+      dv_die "the signature on SHA256SUMS for $release does not verify against $DV_CLOUDIMG_KEYRING"
+    fi
+    dv_log "SHA256SUMS signature is good"
+
+    expected=$(awk -v f="$fname" '$2 == "*" f || $2 == f { print $1; exit }' "$tmp/SHA256SUMS")
+    if [[ ! $expected =~ ^[0-9a-f]{64}$ ]]; then
+      dv_die "$fname is not listed in the signed SHA256SUMS"
+    fi
+
+    dv_log "downloading $fname"
+    fetch "$url/$fname" "$tmp/$fname"
+    actual=$(sha256sum "$tmp/$fname" | awk '{ print $1 }')
+    if [[ $actual != "$expected" ]]; then
+      dv_die "checksum mismatch for $fname: expected $expected, got $actual"
+    fi
+    dv_log "checksum of $fname matches the signed SHA256SUMS"
+
+    chmod 0444 "$tmp/$fname"
+    printf '%s *%s\n' "$expected" "$fname" >"$dest.sha256"
+    mv -f "$tmp/$fname" "$dest"
+    rm -rf -- "$tmp"
+  fi
+  exec {lock}>&-
+  CLOUD_IMAGE=$dest
+}
+
+# variant_image <release> <variant>: finds or builds the variant base image
+# and prints its path.
+variant_image() {
+  local release=$1 variant=$2 dest script lock name tmpimg shared
+  dest="$DV_BASE/$release-$variant.qcow2"
+  script="$DV_LIB_DIR/variants/$variant.sh"
+  if [[ ! -f $script ]]; then
+    dv_die "no provisioning script $script"
+  fi
+
+  if shared=$(dv_shared_image "$release-$variant.qcow2"); then
+    dv_log "using $shared (DOMOVYK_VM_IMAGE_DIR)"
+    printf '%s\n' "$shared"
+    return 0
+  fi
+
+  exec {lock}>"$DV_BASE/.$release-$variant.lock"
+  flock "$lock"
+  if [[ ! -f $dest ]]; then
+    dv_check_kvm
+    dv_need qemu-system-x86_64 qemu-img ssh ssh-keygen setsid timeout
+    dv_ensure_key
+    cloud_image "$release"
+
+    dv_log "building the $variant base image for $release"
+    dv_boot "$release" "$variant" "$CLOUD_IMAGE"
+    name=$DV_BOOTED
+    dv_ssh_args "$name"
+
+    dv_log "running $(basename "$script") in $name"
+    if ! "${DV_SSH[@]}" sudo bash -s <"$script" >&2; then
+      dv_die "provisioning script $(basename "$script") failed in $name"
+    fi
+
+    dv_log "cleaning cloud-init state and shutting down $name"
+    "${DV_SSH[@]}" sudo cloud-init clean --logs </dev/null >&2
+    if ! dv_poweroff "$name" 300; then
+      dv_die "$name did not power off within 300 s"
+    fi
+
+    tmpimg="$DV_BASE/.$release-$variant.qcow2.tmp"
+    DV_CLEANUP_PATHS+=("$tmpimg")
+    rm -f -- "$tmpimg"
+    dv_log "converting the overlay into $(basename "$dest")"
+    # The cloud image under the overlay may be in DOMOVYK_VM_IMAGE_DIR: read
+    # it without QEMU's image locks, as dv_start_qemu does.
+    qemu-img convert --image-opts -O qcow2 \
+      "driver=qcow2,file.filename=$DV_VMS/$name/overlay.qcow2,backing.file.locking=off" "$tmpimg"
+    chmod 0444 "$tmpimg"
+    mv -f "$tmpimg" "$dest"
+    dv_destroy "$name"
+    dv_log "built $dest"
+  fi
+  exec {lock}>&-
+  printf '%s\n' "$dest"
+}
+
+if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+  printf 'usage: %s\n' "$DV_USAGE"
+  exit 0
+fi
+if (($# != 2)); then
+  dv_usage
+fi
+release=$1
+variant=$2
+dv_check_release "$release"
+dv_check_variant "$variant"
+dv_need gpgv sha256sum awk flock python3
+
+if [[ $variant == fresh ]]; then
+  cloud_image "$release"
+  printf '%s\n' "$CLOUD_IMAGE"
+else
+  variant_image "$release" "$variant"
+fi

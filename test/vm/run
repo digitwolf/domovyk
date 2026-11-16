@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Run a command in a test VM over SSH as user tester and pass its exit code
+# through (255 means SSH itself failed).
+# Ported from Motanka's test/vm/run at commit d076748.
+#
+# Usage: test/vm/run <name> -- <command> [args...]
+#        test/vm/run <name> --            (interactive login shell)
+#
+# One argument is sent as a shell command line, so pipes and redirections
+# work: test/vm/run NAME -- 'dpkg -l | wc -l'. Several arguments are quoted
+# one by one, so each reaches the remote command unchanged.
+# stdin is forwarded to the remote command.
+set -euo pipefail
+# shellcheck source=lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+DV_USAGE="test/vm/run <name> -- <command> [args...]"
+dv_init
+
+if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+  printf 'usage: %s\n' "$DV_USAGE"
+  exit 0
+fi
+if (($# < 2)) || [[ $2 != -- ]]; then
+  dv_usage
+fi
+name=$1
+shift 2
+dv_require_running "$name"
+dv_ssh_args "$name"
+
+if (($# == 0)); then
+  exec ssh "${DV_SSH_OPTS[@]}" -t "$DV_SSH_DEST"
+elif (($# == 1)); then
+  exec "${DV_SSH[@]}" "$1"
+else
+  printf -v remote '%q ' "$@"
+  exec "${DV_SSH[@]}" "$remote"
+fi

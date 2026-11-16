@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Capture the Fingerprint of a test VM.
+# Ported from Motanka's test/vm/fingerprint at commit d076748.
+#
+# Usage: test/vm/fingerprint <name> <label>
+#
+# Runs test/vm/collect-fingerprint.sh in the VM with sudo and stores the
+# result in ~/.cache/domovyk-vm/fp/<name>/<label>/, replacing an earlier
+# capture with the same label. Prints that folder on stdout.
+# Compare two captures with tools/fpdiff.py.
+set -euo pipefail
+# shellcheck source=lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+DV_USAGE="test/vm/fingerprint <name> <label>"
+dv_init
+
+if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+  printf 'usage: %s\n' "$DV_USAGE"
+  exit 0
+fi
+if (($# != 2)); then
+  dv_usage
+fi
+name=$1
+label=$2
+if [[ ! $label =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  dv_usage "invalid label '$label' (letters, digits, '.', '_' and '-')"
+fi
+dv_require_running "$name"
+dv_ssh_args "$name"
+
+dest="$DV_FP/$name/$label"
+mkdir -p "$DV_FP/$name"
+tmp=$(mktemp -d "$DV_FP/$name/.$label.XXXXXX")
+DV_CLEANUP_PATHS+=("$tmp")
+
+dv_log "capturing Fingerprint '$label' of $name"
+"${DV_SSH[@]}" sudo bash -s <"$DV_LIB_DIR/collect-fingerprint.sh" |
+  tar -C "$tmp" --no-same-owner -xf -
+
+if [[ ! -s $tmp/packages.tsv ]]; then
+  dv_die "the Fingerprint of $name is incomplete (no packages.tsv)"
+fi
+rm -rf -- "$dest"
+mv -T "$tmp" "$dest"
+printf '%s\n' "$dest"

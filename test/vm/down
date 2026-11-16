@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Stop a test VM and delete its overlay, NVMe disk and state folder.
+# Ported from Motanka's test/vm/down at commit d076748.
+#
+# Usage: test/vm/down <name>
+#
+# Powers the VM off over SSH and waits up to 60 s, then kills QEMU if it is
+# still running. Deletes ~/.cache/domovyk-vm/vms/<name>/.
+set -euo pipefail
+# shellcheck source=lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+DV_USAGE="test/vm/down <name>"
+dv_init
+
+if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+  printf 'usage: %s\n' "$DV_USAGE"
+  exit 0
+fi
+if (($# != 1)); then
+  dv_usage
+fi
+name=$1
+dv_require_vm "$name"
+
+if dv_qemu_pid "$name" >/dev/null; then
+  dv_log "powering off $name"
+  if ! dv_poweroff "$name" "$DV_DOWN_TIMEOUT"; then
+    dv_log "$name still running after $DV_DOWN_TIMEOUT s; killing QEMU"
+  fi
+fi
+dv_destroy "$name"
+dv_log "removed $name"

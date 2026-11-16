@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Boot a throwaway test VM from a copy-on-write overlay.
+# Ported from Motanka's test/vm/up at commit d076748.
+#
+# Usage: test/vm/up <resolute|noble> <fresh|gnome-snaps>
+#
+# Finds or builds the base image first (test/vm/image, which looks in
+# DOMOVYK_VM_IMAGE_DIR first). Attaches the overlay and an empty emulated
+# NVMe data disk. Waits until SSH answers and cloud-init has finished, at
+# most 600 s. Prints the VM name as the last line on stdout; everything else
+# goes to stderr. On failure the serial console tail is printed and the VM
+# folder is deleted.
+#
+# Then brings the VM up to date with apt-get full-upgrade, unless
+# DOMOVYK_VM_UPGRADE=0 (unit-test VMs need no current system).
+set -euo pipefail
+# shellcheck source=lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+DV_USAGE="test/vm/up <resolute|noble> <fresh|gnome-snaps>"
+dv_init
+
+if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+  printf 'usage: %s\n' "$DV_USAGE"
+  exit 0
+fi
+if (($# != 2)); then
+  dv_usage
+fi
+release=$1
+variant=$2
+dv_check_release "$release"
+dv_check_variant "$variant"
+dv_check_kvm
+dv_need qemu-system-x86_64 qemu-img ssh ssh-keygen python3 setsid timeout
+dv_ensure_key
+
+backing=$("$DV_LIB_DIR/image" "$release" "$variant" | tail -n 1)
+if [[ ! -f $backing ]]; then
+  dv_die "base image for $release $variant not found: $backing"
+fi
+
+dv_boot "$release" "$variant" "$backing"
+# A test VM starts as an up-to-date system: the base images are cloud images
+# of their release day plus provisioning, and installing a package on a
+# stale image also pulls archive updates of what it depends on, which a
+# purge does not undo, so two Fingerprints around an install and a purge
+# would differ.
+if [[ ${DOMOVYK_VM_UPGRADE:-1} == 1 ]]; then
+  dv_log "bringing $DV_BOOTED up to date (apt-get full-upgrade; DOMOVYK_VM_UPGRADE=0 skips it)"
+  dv_ssh_args "$DV_BOOTED"
+  # sudo-rs (26.04) ignores sudo -E, so the variable goes through env.
+  if ! "${DV_SSH[@]}" 'sudo env DEBIAN_FRONTEND=noninteractive apt-get -q update &&
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get -q -y \
+      -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold full-upgrade' \
+    </dev/null >"$DV_VMS/$DV_BOOTED/upgrade.log" 2>&1; then
+    tail -n 20 "$DV_VMS/$DV_BOOTED/upgrade.log" >&2 || true
+    dv_die "apt-get full-upgrade failed in $DV_BOOTED"
+  fi
+  if [[ -n ${DOMOVYK_VM_RESULTS:-} && -d ${DOMOVYK_VM_RESULTS:-} ]]; then
+    cp -f "$DV_VMS/$DV_BOOTED/upgrade.log" "$DOMOVYK_VM_RESULTS/$DV_BOOTED.upgrade.log" || true
+  fi
+fi
+dv_unregister "$DV_BOOTED"
+dv_log "ready: $DV_BOOTED (SSH on 127.0.0.1:$(<"$DV_VMS/$DV_BOOTED/ssh.port"))"
+printf '%s\n' "$DV_BOOTED"

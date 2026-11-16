@@ -1,0 +1,328 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2329 # stage_* functions are called by name through run_stage
+# Lint on the host, then unit tests and VM tests in throwaway VMs.
+# Ported from Motanka's test/run-all at commit d076748.
+#
+# Usage: test/run-all [--release resolute|noble] [--keep]
+#                     [--stage lint|unit|vm]... [--test <name>]...
+#
+#   --release  the release of the unit-test VM and of the VM tests
+#              (default resolute, 26.04; noble is 24.04)
+#   --keep     keep the unit-test VM afterwards
+#   --stage    run only these groups of stages (repeatable; default all):
+#                lint  the shellcheck stage
+#                unit  the boot, unit, shfmt and teardown stages
+#                vm    the vm-<test> stages
+#   --test     with the vm group, run only these VM tests (repeatable; the
+#              name of test/vm/tests/<name>.sh)
+#
+# Stages:
+#   [shellcheck] shellcheck on every shell file in the repository except
+#               test/bats/ (host)
+#   boot        a fresh VM of the release, not upgraded
+#   unit        push the repository into that VM and run test/unit/run there
+#               (bats; it refuses to run outside a VM)
+#   shfmt       shfmt -d -i 2 -ci on the same shell files, in that VM
+#               (shfmt is installed there with apt if it is missing; it
+#               never runs on the host)
+#   vm-<test>   every executable test/vm/tests/*.sh, run on the host; each
+#               boots its own VMs and gets DOMOVYK_VM_RELEASE and
+#               DOMOVYK_VM_RESULTS (its own log folder)
+#   teardown    stop the unit-test VM; skipped with --keep
+#
+# Logs go to ~/.cache/domovyk-vm/results/<run-id>/; summary.txt there has
+# one line per stage: PASS, FAIL (exit <code>) or SKIP (<reason>). Exits 1
+# if any stage failed.
+set -euo pipefail
+# shellcheck source=vm/lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/vm/lib.sh"
+DV_USAGE="test/run-all [--release resolute|noble] [--keep] [--stage lint|unit|vm]... [--test <name>]..."
+dv_init
+
+release=resolute
+keep_vm=false
+sel_stages=()
+sel_tests=()
+while (($# > 0)); do
+  case $1 in
+    --release | --stage | --test)
+      if (($# < 2)); then
+        dv_usage "$1 needs a value"
+      fi
+      case $1 in
+        --release) release=$2 ;;
+        --stage) sel_stages+=("$2") ;;
+        --test) sel_tests+=("$2") ;;
+      esac
+      shift 2
+      ;;
+    --release=*)
+      release=${1#*=}
+      shift
+      ;;
+    --stage=*)
+      sel_stages+=("${1#*=}")
+      shift
+      ;;
+    --test=*)
+      sel_tests+=("${1#*=}")
+      shift
+      ;;
+    --keep)
+      keep_vm=true
+      shift
+      ;;
+    -h | --help)
+      printf 'usage: %s\n' "$DV_USAGE"
+      exit 0
+      ;;
+    *)
+      dv_usage "unknown argument '$1'"
+      ;;
+  esac
+done
+dv_check_release "$release"
+for s in "${sel_stages[@]}"; do
+  case $s in
+    lint | unit | vm) ;;
+    *) dv_usage "unknown stage group '$s' (expected lint, unit or vm)" ;;
+  esac
+done
+
+# want <group>: the group runs (all of them when no --stage was given).
+want() {
+  local s
+  if ((${#sel_stages[@]} == 0)); then
+    return 0
+  fi
+  for s in "${sel_stages[@]}"; do
+    if [[ $s == "$1" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+if ((${#sel_tests[@]} > 0)); then
+  if ! want vm; then
+    dv_usage "--test needs the vm stage group"
+  fi
+  for t in "${sel_tests[@]}"; do
+    if [[ ! $t =~ ^[a-z0-9][a-z0-9-]*$ || ! -x $DV_LIB_DIR/tests/$t.sh ]]; then
+      dv_usage "no VM test '$t' (expected the name of an executable test/vm/tests/<name>.sh)"
+    fi
+  done
+fi
+
+if want lint; then
+  dv_need shellcheck
+fi
+if want unit || want vm; then
+  dv_check_kvm
+  dv_need qemu-system-x86_64 qemu-img ssh ssh-keygen rsync python3 \
+    gpgv setsid timeout flock
+fi
+
+run_id="$(date -u +%Y%m%dT%H%M%SZ)-$(dv_hex6)"
+RESULTS_DIR="$DV_RESULTS/$run_id"
+mkdir -p "$RESULTS_DIR"
+export DOMOVYK_VM_RESULTS="$RESULTS_DIR"
+export DOMOVYK_VM_RELEASE="$release"
+
+STAGES=()
+declare -A RESULT=()
+declare -A REASON=()
+unit_vm=""
+
+# run_stage <stage> <command...>: runs the command, logs its output to
+# <stage>.log and stderr, and records the exit code.
+run_stage() {
+  local stage=$1 rc=0
+  shift
+  dv_log "--- $stage"
+  "$@" 2>&1 | tee "$RESULTS_DIR/$stage.log" >&2 || rc=$?
+  STAGES+=("$stage")
+  RESULT[$stage]=$rc
+  if ((rc == 0)); then
+    dv_log "--- $stage: PASS"
+  else
+    dv_log "--- $stage: FAIL (exit $rc)"
+  fi
+}
+
+skip_stage() {
+  STAGES+=("$1")
+  RESULT[$1]=skip
+  REASON[$1]=$2
+  dv_log "--- $1: SKIP ($2)"
+}
+
+# selected <test-name>: the test runs in this invocation (all of them when
+# no --test was given).
+selected() {
+  local t
+  if ((${#sel_tests[@]} == 0)); then
+    return 0
+  fi
+  for t in "${sel_tests[@]}"; do
+    if [[ $t == "$1" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Prints the repository-relative path of every shell file outside .git,
+# test/bats and the git-ignored /.cache and /build: *.sh, *.bash, *.bats, and
+# files with a sh, bash or bats shebang.
+list_shell_files() {
+  local f first
+  local sh_re='^#!.*(/|[[:space:]])(ba|da)?sh([[:space:]]|$)'
+  local bats_re='^#!.*(/|[[:space:]])bats([[:space:]]|$)'
+  while IFS= read -r -d '' f; do
+    f=${f#./}
+    case $f in
+      *.sh | *.bash | *.bats)
+        printf '%s\n' "$f"
+        continue
+        ;;
+    esac
+    first=""
+    IFS= read -r first <"$DV_REPO/$f" 2>/dev/null || true
+    if [[ $first =~ $sh_re || $first =~ $bats_re ]]; then
+      printf '%s\n' "$f"
+    fi
+  done < <(cd "$DV_REPO" && find . \( -path ./.git -o -path ./test/bats -o -path ./.cache -o -path ./build \) -prune -o -type f -print0)
+}
+
+stage_shellcheck() {
+  local -a files
+  mapfile -t files < <(list_shell_files | LC_ALL=C sort)
+  if ((${#files[@]} == 0)); then
+    echo "no shell files found"
+    return 1
+  fi
+  printf 'shellcheck %s on %d files:\n' \
+    "$(shellcheck --version | sed -n 's/^version: //p')" "${#files[@]}"
+  printf '  %s\n' "${files[@]}"
+  (cd "$DV_REPO" && shellcheck -- "${files[@]}")
+}
+
+stage_boot() {
+  DOMOVYK_VM_UPGRADE=0 "$DV_LIB_DIR/up" "$release" fresh >"$RESULTS_DIR/unit-vm.name"
+}
+
+stage_unit() {
+  "$DV_LIB_DIR/push" "$unit_vm" </dev/null || return 1
+  "$DV_LIB_DIR/run" "$unit_vm" -- "$DV_GUEST_REPO/test/unit/run" </dev/null
+}
+
+stage_shfmt() {
+  local -a files
+  mapfile -t files < <(list_shell_files | LC_ALL=C sort)
+  # shellcheck disable=SC2016 # expanded by the shell in the VM
+  "$DV_LIB_DIR/run" "$unit_vm" -- bash -c 'set -e
+    if ! command -v shfmt >/dev/null; then
+      echo "installing shfmt in the VM"
+      sudo env DEBIAN_FRONTEND=noninteractive apt-get -q update >/dev/null
+      sudo env DEBIAN_FRONTEND=noninteractive apt-get -q -y install shfmt >/dev/null
+    fi
+    cd "$1"
+    shift
+    printf "shfmt %s -d -i 2 -ci on %d files\n" "$(shfmt --version)" "$#"
+    shfmt -d -i 2 -ci -- "$@"' shfmt "$DV_GUEST_REPO" "${files[@]}" </dev/null
+}
+
+{
+  printf 'run-id: %s\n' "$run_id"
+  printf 'release: %s\n' "$release"
+  printf 'stages: %s\n' "${sel_stages[*]:-lint unit vm}"
+  printf 'tests: %s\n' "${sel_tests[*]:-all}"
+  printf 'commit: %s\n' "$(git -C "$DV_REPO" rev-parse HEAD 2>/dev/null || echo unknown)"
+  printf 'changed files: %s\n' "$(git -C "$DV_REPO" status --porcelain 2>/dev/null | wc -l)"
+  if command -v qemu-system-x86_64 >/dev/null 2>&1; then
+    printf 'qemu: %s\n' "$(qemu-system-x86_64 --version | head -n 1)"
+  else
+    printf 'qemu: not used\n'
+  fi
+  printf 'vm: cpus=%s ram=%s gpu-args=%s\n' "${DOMOVYK_VM_CPUS:-4}" \
+    "${DOMOVYK_VM_RAM:-6G}" "${DOMOVYK_VM_GPU_ARGS-$DV_DEFAULT_GPU_ARGS}"
+  printf 'image dir: %s\n' "${DOMOVYK_VM_IMAGE_DIR:-none}"
+} >"$RESULTS_DIR/run.txt"
+dv_log "run $run_id on $release; logs in $RESULTS_DIR"
+
+# 1. Lint on the host.
+if want lint; then
+  run_stage shellcheck stage_shellcheck
+fi
+
+# 2. Unit tests and shfmt inside a VM.
+if want unit; then
+  run_stage boot stage_boot </dev/null
+  if [[ ${RESULT[boot]} == 0 ]]; then
+    unit_vm=$(tail -n 1 "$RESULTS_DIR/unit-vm.name")
+    if ! dv_valid_name "$unit_vm"; then
+      dv_die "test/vm/up printed an invalid VM name '$unit_vm'"
+    fi
+    if ! $keep_vm; then
+      DV_CLEANUP_VMS+=("$unit_vm")
+    fi
+    run_stage unit stage_unit
+    run_stage shfmt stage_shfmt
+  else
+    skip_stage unit "no VM"
+    skip_stage shfmt "no VM"
+  fi
+fi
+
+# 3. VM tests; each boots its own VMs.
+if want vm; then
+  shopt -s nullglob
+  tests=("$DV_LIB_DIR"/tests/*.sh)
+  shopt -u nullglob
+  if ((${#tests[@]} == 0)); then
+    dv_log "no VM tests in test/vm/tests/"
+  fi
+  for t in "${tests[@]}"; do
+    name=$(basename "$t" .sh)
+    if ! selected "$name"; then
+      continue
+    fi
+    if [[ ! -x $t ]]; then
+      dv_log "ignoring $t: not executable"
+      continue
+    fi
+    stage="vm-$name"
+    run_stage "$stage" env DOMOVYK_VM_RELEASE="$release" \
+      DOMOVYK_VM_RESULTS="$RESULTS_DIR/$stage" "$t" </dev/null
+  done
+fi
+
+# 4. Teardown.
+if [[ -n $unit_vm ]]; then
+  if $keep_vm; then
+    dv_log "kept VM $unit_vm; remove it with: test/vm/down $unit_vm"
+  else
+    run_stage teardown "$DV_LIB_DIR/down" "$unit_vm" </dev/null
+    if [[ ${RESULT[teardown]} == 0 ]]; then
+      dv_unregister "$unit_vm"
+    fi
+  fi
+fi
+
+failed=0
+for s in "${STAGES[@]}"; do
+  case ${RESULT[$s]} in
+    0) word=PASS ;;
+    skip) word="SKIP (${REASON[$s]})" ;;
+    *)
+      word="FAIL (exit ${RESULT[$s]})"
+      failed=1
+      ;;
+  esac
+  printf '%-28s %s\n' "$s" "$word"
+done >"$RESULTS_DIR/summary.txt"
+dv_log "summary:"
+cat "$RESULTS_DIR/summary.txt" >&2
+dv_log "logs: $RESULTS_DIR"
+exit "$failed"
