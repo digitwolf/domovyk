@@ -44,15 +44,15 @@ Rules for every task:
   - _Requirements: 17.1, 10.1, 13.5_
 
 - [ ] 5. Foundations
-- [ ] 5.1 Dispatcher, Command_Metadata, `commands` and `version`
+- [x] 5.1 Dispatcher, Command_Metadata, `commands` and `version`
   - Create `bin/domovyk`, `libexec/commands/domovyk-commands` and `domovyk-version`, with route resolution, the default-action table, suggestions for unknown routes, `--help` and the release warning.
   - Add `test/unit/cli.bats` and `test/unit/metadata.bats`.
   - _Requirements: 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 4.4_
-- [ ] 5.2 Shared library and Envelope
+- [x] 5.2 Shared library and Envelope
   - Create `libexec/lib/domovyk.sh` with `dv_init`, `dv_have`, `dv_source` (timeouts), `dv_readable`, `dv_mktemp_dir`, `dv_emit`, `dv_die`, `dv_usage` and the Facts_Cache.
   - Add `test/unit/lib.bats` (timeout with a 15 s fake, missing tool, permission) and `test/unit/schemas.bats` with the Envelope predicate.
   - _Requirements: 1.2, 1.3, 1.4, 3.3, 4.2, 4.3, 4.5, 4.6_
-- [ ] 5.3 Redactor
+- [x] 5.3 Redactor
   - Create `libexec/py/redact.py` and `share/redact.tsv` with the rules in `design.md`.
   - Add `test/unit/py/test_redact.py` (seeded properties: secrets removed, clean text unchanged, idempotent) and `test/unit/redact.bats` (`--raw` line, missing or invalid rules file).
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
@@ -100,7 +100,7 @@ Rules for every task:
 - [ ] 9.2 Status
   - Create `domovyk-status` (`--brief`, parallel collection and the Facts_Cache), `render/status.jq` and `status.bats`. Cases: 40-line cap, 2,000-character cap, findings in JSON, every Source unavailable.
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
-- [ ] 9.3 Handoff
+- [x] 9.3 Handoff
   - Create `domovyk-handoff-create`, `domovyk-handoff-list`, `domovyk-handoff-show`, `render/handoff.jq` and `handoff.bats`. Cases: header, mode 0600, the `! sudo bash` line, empty input, 64 KiB limit, `bash -n` failure, never executed.
   - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7_
 
@@ -126,7 +126,7 @@ Rules for every task:
   - Create `share/claude/.claude-plugin/marketplace.json`, `plugins/domovyk/.claude-plugin/plugin.json`, `agents/domovyk-investigator.md`, `hooks/hooks.json` and the two hook wrapper scripts.
   - Add `plugin.bats`: JSON shape, no `bin/`, Investigator tools. Run `claude plugin validate --strict` in a 26.04 VM.
   - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5_
-- [ ] 12.2 Guard_Hook
+- [x] 12.2 Guard_Hook
   - Create `libexec/py/guard.py`, `libexec/hooks/guard`, `test/unit/fixtures/guard-corpus.tsv` (≥ 150 lines), `test/unit/guard.bats` and `test/unit/py/test_guard.py` (seeded properties for inserting and removing `sudo`).
   - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5_
 - [ ] 12.3 Context_Hook

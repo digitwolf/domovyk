@@ -152,7 +152,7 @@ The first comment block of each Command:
 | `dv_have <cmd> <apt-package>` | Returns 0 if `<cmd>` is on PATH. Otherwise records `{source:<cmd>, reason:"missing", package:<apt-package>}` and returns 1. |
 | `dv_source <name> [--timeout s] -- <argv…>` | Runs argv with `timeout --kill-after=2 ${s:-$DOMOVYK_TIMEOUT}`, stdout to a temp file, stderr to a second one. Exit 124 or 137 records `timeout`. A permission error (`EACCES` text, or exit 77 from our own wrappers) records `permission`. Prints the temp file path on success. |
 | `dv_readable <path> <name>` | Records `permission` for an unreadable path and returns 1. |
-| `dv_mktemp_dir` | `mktemp -d` with mode 0700, registered in `DV_TMPDIRS`. |
+| `dv_mktemp_dir` | Prints a new mode-0700 directory inside the Command's own temporary tree, which the EXIT, INT and TERM traps delete. Safe to call as `$(dv_mktemp_dir)`. |
 | `dv_emit <json-file>` | Merges the Envelope into the JSON. Pipes it through `redact.py --json` unless `DOMOVYK_RAW=1`. Prints it with `--json`, or renders it with `render/<group>.jq`. |
 | `dv_die <step> <message>` | Prints `domovyk <route>: <step>: <message>` to stderr and exits 1 (4.5). |
 | `dv_usage <message>` | Prints usage and exits 2. |
@@ -370,7 +370,7 @@ A local-path marketplace is loaded in place, so an upgrade of the Package takes 
 | `redirect-device` | an output redirection or `tee` to `/dev/sd*`, `/dev/nvme*`, `/dev/mmcblk*`, `/dev/mapper/*` |
 | `fork-bomb` | the token sequence of `:(){ :|:& };:` |
 
-6. **Investigator (18.4):** when `agent_type` ends with `domovyk-investigator`, allow only commands whose every simple command is `domovyk <read route>` (resolved against the route table generated at build time into `py/routes.json`) or one of `jq head tail grep wc sort uniq cut` used in a pipeline after a `domovyk` command. Deny anything else with `the investigator only runs domovyk read commands`.
+6. **Investigator (18.4):** when `agent_type` ends with `domovyk-investigator`, allow only commands whose every simple command is `domovyk <read route>` (resolved against the read-tier routes, which the guard reads from the Command_Metadata of `$DOMOVYK_LIBEXEC/commands` at run time, so the working tree needs no build step) or one of `jq head tail grep wc sort uniq cut` used in a pipeline after a `domovyk` command. Deny anything else with `the investigator only runs domovyk read commands`.
 7. Otherwise print nothing and exit 0 (18.3).
 
 Deny output:
@@ -503,7 +503,7 @@ Decisions made while porting (tasks 1.1–1.4):
 
 ## Data Models
 
-**Command_Metadata:** lines matching `^# domovyk:(summary|tier|args|examples)=(.*)$` in the first 15 lines.
+**Command_Metadata:** lines matching `^# domovyk:(summary|tier|args|examples|needs-args)=(.*)$` in the first 15 lines. `needs-args=yes` marks a Command that cannot run without an argument; the generic tests that run every Read_Command skip it, and its own test file covers it.
 
 **User_Ledger** (`~/.local/state/domovyk/ledger`, mode 0600):
 
