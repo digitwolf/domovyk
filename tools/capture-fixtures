@@ -1,0 +1,42 @@
+#!/bin/bash
+# Capture Source output on this machine as unit-test fixtures, redacted.
+#
+# Usage: tools/capture-fixtures <case> <tool> [args...]
+#        tools/capture-fixtures --file <case> <path>
+#
+# Runs the read-only command (or copies the file) as the current user, pipes
+# it through the Redactor and writes test/unit/fixtures/<tool>/<case>/<argkey>
+# (or test/unit/fixtures/sysroot/<case>/<path>), plus .rc and .err. Allowed on
+# the development host because it only reads (.kiro/steering/testing.md);
+# review every captured file for personal data before committing it.
+set -euo pipefail
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+redact=(python3 -I "$repo/libexec/py/redact.py" --rules "$repo/share/redact.tsv")
+
+if [[ ${1:-} == --file ]]; then
+  case=$2 path=$3
+  dest="$repo/test/unit/fixtures/sysroot/$case$path"
+  mkdir -p "$(dirname "$dest")"
+  "${redact[@]}" <"$path" >"$dest"
+  printf '%s\n' "$dest"
+  exit 0
+fi
+
+(($# >= 2)) || {
+  echo "usage: tools/capture-fixtures <case> <tool> [args...] | --file <case> <path>" >&2
+  exit 2
+}
+case=$1 tool=$2
+shift 2
+key=$(printf '%s_' "$@" | sed 's/_$//; s/[^A-Za-z0-9._-]/_/g' | cut -c1-200)
+dir="$repo/test/unit/fixtures/$tool/$case"
+mkdir -p "$dir"
+out="$dir/${key:-noargs}"
+rc=0
+timeout 20 "$tool" "$@" </dev/null >"$out.raw" 2>"$out.err.raw" || rc=$?
+"${redact[@]}" <"$out.raw" >"$out"
+"${redact[@]}" <"$out.err.raw" >"$out.err"
+rm -f "$out.raw" "$out.err.raw"
+[[ -s $out.err ]] || rm -f "$out.err"
+((rc == 0)) || printf '%s\n' "$rc" >"$out.rc"
+printf '%s (exit %s)\n' "$out" "$rc"

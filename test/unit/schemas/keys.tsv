@@ -1,3 +1,19 @@
 # schema	top-level keys beyond the Envelope (design.md, Envelope and schemas; requirement 4.6)
 domovyk.commands.v1	commands
 domovyk.version.v1	version root
+domovyk.status.v1	reboot failed_units updates crashes_7d fullest_filesystem findings
+domovyk.doctor.v1	findings
+domovyk.updates.v1	apt snap flatpak firmware reboot sources unattended
+domovyk.drivers.v1	devices candidates dkms secure_boot firmware_devices
+domovyk.crash-list.v1	crashes
+domovyk.crash-info.v1	crash recurrence oom apt_history
+domovyk.crash-backtrace.v1	crash_id signal threads libraries symbols
+domovyk.logs.v1	boot groups oom_kills kernel suspend journal
+domovyk.logs-unit.v1	unit entries
+domovyk.perf.v1	load cpu_count memory swap zram pressure top_cpu top_memory thermal throttling power_profile boot sample
+domovyk.disk.v1	filesystems reclaimable drives fstrim_timer
+domovyk.disk-usage.v1	path entries incomplete
+domovyk.services.v1	failed_system failed_user
+domovyk.services-status.v1	unit
+domovyk.hw.v1	cpu gpus memory_bytes battery firmware machine
+domovyk.handoff.v1	scripts

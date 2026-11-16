@@ -8,7 +8,9 @@
 # Environment set by bin/domovyk: DOMOVYK_LIBEXEC, DOMOVYK_SHARE,
 # DOMOVYK_ROUTE. Read here: DOMOVYK_FORMAT (text|json, also set by --json),
 # DOMOVYK_RAW (0|1, also set by --raw), DOMOVYK_TIMEOUT (seconds, default 10),
-# DOMOVYK_OS_RELEASE (tests), DOMOVYK_CACHE (default ~/.cache/domovyk).
+# DOMOVYK_OS_RELEASE (tests), DOMOVYK_CACHE (default ~/.cache/domovyk),
+# DOMOVYK_SYSROOT (tests: a folder that file Sources under /proc, /sys, /run,
+# /var and /etc are read from; empty on a real system).
 
 DV_SCHEMA=""
 DV_RENDER=""
@@ -17,6 +19,10 @@ DV_UNAVAIL=""
 DV_TMPDIRS=()
 DV_OUT="" DV_ERR="" DV_RC=0
 DV_ARGS=()
+DV_SYS=${DOMOVYK_SYSROOT:-}
+
+# dv_path <absolute path>: where to read a file Source (DOMOVYK_SYSROOT).
+dv_path() { printf '%s%s' "$DV_SYS" "$1"; }
 
 dv_cleanup() {
   local d

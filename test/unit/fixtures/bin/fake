@@ -1,0 +1,27 @@
+#!/bin/bash
+# Fake_Bin: stands in for a Source program by replaying recorded output.
+# Installed as symlinks named after the program (test/unit/fixtures/bin/<tool>
+# -> fake). For a call "<tool> <args...>" it looks for, in order:
+#   $FIXTURES/<tool>/<case>/<argkey>      argkey = the arguments joined by "_",
+#   $FIXTURES/<tool>/<case>/default       with every other character as "_"
+# where <case> is $FAKE_CASE_<TOOL> (tool upper-cased, "-" as "_"), else
+# $FAKE_CASE, else "default". Next to the output file, <file>.rc holds the
+# exit status and <file>.err the stderr. A missing fixture exits 127 with a
+# message, so a test never silently gets real host output.
+# FAKE_LOG, if set, receives one line per call: "<tool> <args...>".
+set -euo pipefail
+tool=${0##*/}
+var="FAKE_CASE_$(tr 'a-z-' 'A-Z_' <<<"$tool")"
+case=${!var:-${FAKE_CASE:-default}}
+key=$(printf '%s_' "$@" | sed 's/_$//; s/[^A-Za-z0-9._-]/_/g' | cut -c1-200)
+dir=${FIXTURES:?FIXTURES is not set}/$tool/$case
+[[ -n ${FAKE_LOG:-} ]] && printf '%s %s\n' "$tool" "$*" >>"$FAKE_LOG"
+for f in "$dir/${key:-noargs}" "$dir/default"; do
+  if [[ -f $f ]]; then
+    [[ -f $f.err ]] && cat "$f.err" >&2
+    cat "$f"
+    exit "$(cat "$f.rc" 2>/dev/null || echo 0)"
+  fi
+done
+printf 'fake %s: no fixture %s or %s/default\n' "$tool" "$dir/${key:-noargs}" "$dir" >&2
+exit 127

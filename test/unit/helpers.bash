@@ -42,3 +42,31 @@ fake_command() {
     "$1" "$2" "$3" >"$f"
   chmod +x "$f"
 }
+
+# use_fakes <tool...>: puts Fake_Bin symlinks for these tools in front of
+# PATH, replaying test/unit/fixtures/<tool>/<case>/.
+use_fakes() {
+  export FIXTURES="$REPO/test/unit/fixtures"
+  local t
+  for t in "$@"; do
+    ln -sf "$REPO/test/unit/fixtures/bin/fake" "$STUBS/$t"
+  done
+}
+
+# use_sysroot <name>: file Sources (/proc, /sys, /run, /var, /etc) are read
+# under test/unit/fixtures/sysroot/<name>/ (DOMOVYK_SYSROOT).
+use_sysroot() {
+  export DOMOVYK_SYSROOT="$REPO/test/unit/fixtures/sysroot/$1"
+}
+
+# only_path <tool...>: a PATH holding the stub folder plus symlinks to the
+# named system tools only, so every other Source is missing for this test.
+only_path() {
+  local dir="$BATS_TEST_TMPDIR/only" t
+  mkdir -p "$dir"
+  for t in bash sh env cat sed awk grep jq python3 mktemp rm mkdir chmod date stat timeout \
+    cp mv tr cut head tail sort uniq wc printf readlink dirname basename uname sleep ln "$@"; do
+    command -v "$t" >/dev/null 2>&1 && ln -sf "$(command -v "$t")" "$dir/$t"
+  done
+  export PATH="$STUBS:$dir"
+}
