@@ -1,0 +1,2 @@
+mce: CPU0: Package temperature above threshold, cpu clock throttled (total events = 3)
+mce: CPU2: Core temperature above threshold, cpu clock throttled (total events = 1)

@@ -1,0 +1,29 @@
+      1       0     0  0.0   14848 systemd
+      2       0     0  0.0       0 kthreadd
+    523       1     0  0.0   61440 systemd-journal
+    889       1   991  0.0   11264 systemd-resolve
+   1203       1     0  0.0   20480 NetworkManager
+   1310       1     0  0.1    9216 thermald
+   1355       1     0  0.0   13312 power-profiles-
+   2210       1  1000  0.0   12544 systemd
+   2290    2210  1000  0.4   21760 pipewire
+   2295    2210  1000  0.1   18432 wireplumber
+   2402    2210  1000  3.4  412160 gnome-shell
+   2950    2402  1000  0.2   98304 Xwayland
+   3301    2210  1000  0.7   65536 ptyxis
+   3320    3301  1000  0.0    5632 bash
+   4410    2402  1000  2.1  459776 firefox
+   4472    4410  1000  0.3  166400 Web Content
+   4519    4410  1000  8.8  573440 Isolated Web Co
+   4580    4410  1000  0.9  306176 Isolated Web Co
+   4602    4410  1000  0.1   99840 Isolated Web Co
+   5120    2210  1000 32.3   53760 snap-store
+   6011    3320  1000  118 1258496 qemu-system-x86
+   6150    3320  1000 96.7 2097152 qemu-system-x86
+   7202       2     0  0.9       0 kworker/18:2-i915-unordered
+   7310       1     0  0.0    7168 cron
+   7420       1     0  0.0   25600 udisksd
+   7533       1     0  0.0    8192 upowerd
+   7601    2210  1000  1.1  471040 code
+   7650    7601  1000  0.5  230400 code
+   8820       2     0  0.0       0 kworker/u80:3-kcryptd-252:0-1
