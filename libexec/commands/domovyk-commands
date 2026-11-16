@@ -1,0 +1,24 @@
+#!/bin/bash
+# domovyk:summary=List every domovyk command with its tier and summary
+# domovyk:tier=read
+# domovyk:args=[--json]
+# domovyk:examples=domovyk commands | domovyk commands --json
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+dv_init domovyk.commands.v1 "" "$@"
+((${#DV_ARGS[@]} == 0)) || dv_usage "unexpected argument: ${DV_ARGS[0]}"
+
+body=$DV_TMP/body.json
+{
+  for f in "$DOMOVYK_LIBEXEC"/commands/domovyk-*; do
+    [[ -f $f && -x $f ]] || continue
+    name=${f##*/domovyk-}
+    meta() { sed -n "1,15s/^# domovyk:$1=//p" "$f" | head -n 1; }
+    jq -cn --arg route "${name//-/ }" --arg tier "$(meta tier)" --arg summary "$(meta summary)" \
+      --arg args "$(meta args)" --arg examples "$(meta examples)" \
+      '{route: $route, tier: $tier, summary: $summary, args: $args,
+        examples: ($examples | split(" | ") | map(select(. != "")))}'
+  done
+} | jq -s '{commands: (sort_by(.route))}' >"$body"
+dv_emit "$body"

@@ -1,0 +1,179 @@
+#!/bin/bash
+# domovyk: dispatcher for the domovyk-<group>-<action> commands.
+#
+#   domovyk <group> [<action>] [options] [args]
+#   domovyk commands [--json]
+#   domovyk --version | --help
+#
+# Finds its tree from DOMOVYK_ROOT, or from its own location: /usr/bin/domovyk
+# uses /usr/libexec/domovyk and /usr/share/domovyk; bin/domovyk in a working
+# tree uses libexec/ and share/ next to it. Exit codes: 0 ok, 1 internal
+# failure, 2 usage error (design.md, Dispatcher).
+set -euo pipefail
+
+dv_locate() {
+  local self root
+  self=$(readlink -f -- "${BASH_SOURCE[0]}")
+  root=${DOMOVYK_ROOT:-$(dirname -- "$(dirname -- "$self")")}
+  if [[ -d $root/libexec/domovyk/commands ]]; then
+    DOMOVYK_LIBEXEC=$root/libexec/domovyk
+    DOMOVYK_SHARE=$root/share/domovyk
+  elif [[ -d $root/libexec/commands ]]; then
+    DOMOVYK_LIBEXEC=$root/libexec
+    DOMOVYK_SHARE=$root/share
+  else
+    printf 'domovyk: cannot find the command tree under %s\n' "$root" >&2
+    exit 1
+  fi
+  DOMOVYK_ROOT=$root
+  export DOMOVYK_ROOT DOMOVYK_LIBEXEC DOMOVYK_SHARE
+}
+
+# One warning when the release is not a Supported_Release (requirement 1.5).
+dv_release_check() {
+  local file=${DOMOVYK_OS_RELEASE:-/etc/os-release} codename=""
+  [[ -r $file ]] && codename=$(sed -n 's/^VERSION_CODENAME=//p' "$file" | tr -d '"')
+  case $codename in
+  noble | resolute) ;;
+  *) printf 'domovyk: warning: %s is not a supported release (24.04 noble, 26.04 resolute)\n' \
+    "${codename:-an unknown system}" >&2 ;;
+  esac
+}
+
+# Default actions for groups that have no command of their own.
+declare -A DV_DEFAULT_ACTION=([crash]=list [handoff]=list)
+
+dv_commands_dir() { printf '%s/commands' "$DOMOVYK_LIBEXEC"; }
+
+# Prints every route, one per line ("crash list", "updates", ...).
+dv_routes() {
+  local f name
+  for f in "$(dv_commands_dir)"/domovyk-*; do
+    [[ -f $f && -x $f ]] || continue
+    name=${f##*/domovyk-}
+    printf '%s\n' "${name//-/ }"
+  done
+}
+
+# dv_meta <file> <key>: prints one Command_Metadata value.
+dv_meta() {
+  sed -n "1,15s/^# domovyk:$2=//p" "$1" | head -n 1
+}
+
+dv_show_help() {
+  local file=$1 route=$2 key value
+  printf 'domovyk %s\n' "$route"
+  for key in summary tier args examples; do
+    value=$(dv_meta "$file" "$key")
+    [[ -n $value ]] && printf '  %-9s %s\n' "$key:" "$value"
+  done
+  return 0
+}
+
+dv_show_group() {
+  local group=$1 route found=0 file
+  while IFS= read -r route; do
+    [[ $route == "$group" || $route == "$group "* ]] || continue
+    file="$(dv_commands_dir)/domovyk-${route// /-}"
+    printf '  domovyk %-22s %s\n' "$route" "$(dv_meta "$file" summary)"
+    found=1
+  done < <(dv_routes)
+  ((found))
+}
+
+dv_top_help() {
+  cat <<'EOF'
+domovyk: Claude looks after this Ubuntu machine.
+
+usage: domovyk <group> [<action>] [--json] [--raw] [args]
+       domovyk commands [--json]     list every command
+       domovyk <group> --help        show a group's commands
+       domovyk --version
+
+Read commands change nothing. Every change is a handoff script you read and run.
+EOF
+}
+
+# Levenshtein distance, for suggestions on an unknown route.
+dv_suggest() {
+  local want=$1
+  dv_routes | awk -v w="$want" '
+    function lev(a, b,    i, j, la, lb, d, c, x, y, z) {
+      la = length(a); lb = length(b)
+      for (i = 0; i <= la; i++) d[i, 0] = i
+      for (j = 0; j <= lb; j++) d[0, j] = j
+      for (i = 1; i <= la; i++)
+        for (j = 1; j <= lb; j++) {
+          c = (substr(a, i, 1) == substr(b, j, 1)) ? 0 : 1
+          x = d[i-1, j] + 1; y = d[i, j-1] + 1; z = d[i-1, j-1] + c
+          d[i, j] = (x < y ? (x < z ? x : z) : (y < z ? y : z))
+        }
+      return d[la, lb]
+    }
+    { printf "%d\t%s\n", lev(w, $0), $0 }' | sort -n -k1,1 | head -n 3 | cut -f2
+}
+
+dv_wants_help() {
+  local a
+  for a in "$@"; do
+    [[ $a == -- ]] && return 1
+    [[ $a == --help || $a == -h ]] && return 0
+  done
+  return 1
+}
+
+main() {
+  dv_locate
+  if (($# == 0)); then
+    dv_top_help
+    exit 2
+  fi
+  case $1 in
+  --version) set -- version ;;
+  --help | -h | help)
+    dv_top_help
+    exit 0
+    ;;
+  esac
+  dv_release_check
+
+  local dir file="" route="" consumed=0 group=$1
+  dir=$(dv_commands_dir)
+  if (($# >= 2)) && [[ $2 != -* && -x $dir/domovyk-$1-$2 ]]; then
+    file=$dir/domovyk-$1-$2 route="$1 $2" consumed=2
+  elif [[ -x $dir/domovyk-$1 ]]; then
+    file=$dir/domovyk-$1 route=$1 consumed=1
+  elif [[ -n ${DV_DEFAULT_ACTION[$1]:-} ]]; then
+    if dv_wants_help "${@:2}"; then
+      printf 'domovyk %s\n' "$1"
+      dv_show_group "$1"
+      exit 0
+    fi
+    file=$dir/domovyk-$1-${DV_DEFAULT_ACTION[$1]} route="$1 ${DV_DEFAULT_ACTION[$1]}" consumed=1
+  elif dv_wants_help "${@:2}" && dv_show_group "$group" >/dev/null; then
+    printf 'domovyk %s\n' "$group"
+    dv_show_group "$group"
+    exit 0
+  else
+    printf 'domovyk: unknown command: %s\n' "$*" >&2
+    printf 'closest commands:\n' >&2
+    dv_suggest "${*:1:2}" | sed 's/^/  domovyk /' >&2
+    exit 2
+  fi
+  shift "$consumed"
+
+  if dv_wants_help "$@"; then
+    dv_show_help "$file" "$route"
+    # A group command also lists the actions under it.
+    if [[ $route != *" "* ]] && dv_routes | grep -q "^$route "; then
+      printf 'actions:\n'
+      dv_show_group "$route" | grep -v "^  domovyk $route  "
+    fi
+    exit 0
+  fi
+
+  export DOMOVYK_ROUTE=$route
+  exec "$file" "$@"
+}
+
+main "$@"

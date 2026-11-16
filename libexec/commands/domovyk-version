@@ -1,0 +1,15 @@
+#!/bin/bash
+# domovyk:summary=Show the domovyk version and where it runs from
+# domovyk:tier=read
+# domovyk:args=[--json]
+# domovyk:examples=domovyk version | domovyk --version
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+dv_init domovyk.version.v1 "" "$@"
+((${#DV_ARGS[@]} == 0)) || dv_usage "unexpected argument: ${DV_ARGS[0]}"
+
+version=unknown
+[[ -r $DOMOVYK_SHARE/VERSION ]] && version=$(head -n 1 "$DOMOVYK_SHARE/VERSION")
+jq -n --arg v "$version" --arg r "$DOMOVYK_ROOT" '{version: $v, root: $r}' >"$DV_TMP/body.json"
+dv_emit "$DV_TMP/body.json"

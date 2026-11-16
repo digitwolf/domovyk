@@ -1,0 +1,3 @@
+# schema	top-level keys beyond the Envelope (design.md, Envelope and schemas; requirement 4.6)
+domovyk.commands.v1	commands
+domovyk.version.v1	version root
