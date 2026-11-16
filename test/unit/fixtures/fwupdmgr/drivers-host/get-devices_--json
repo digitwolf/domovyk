@@ -1,0 +1,171 @@
+{
+  "Devices": [
+    {
+      "Name": "13th Gen Intel Core™ i9-13900H",
+      "DeviceId": "0000000000000000000000000000000000000000",
+      "Guid": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "Plugin": "cpu",
+      "Flags": [
+        "internal"
+      ],
+      "Vendor": "Intel",
+      "Version": "0x00006134",
+      "VersionFormat": "hex"
+    },
+    {
+      "Name": "Internal SPI Controller (BIOS)",
+      "DeviceId": "0000000000000000000000000000000000000000",
+      "Guid": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "Plugin": "mtd",
+      "Flags": [
+        "internal",
+        "needs-reboot",
+        "can-verify",
+        "can-verify-image",
+        "updatable-hidden",
+        "signed-payload"
+      ],
+      "Vendor": "Intel",
+      "Version": "1.32.0",
+      "VersionFormat": "triplet"
+    },
+    {
+      "Name": "KXG80ZNV2T04 NVMe KIOXIA 2048GB",
+      "DeviceId": "0000000000000000000000000000000000000000",
+      "Guid": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "Plugin": "nvme",
+      "Flags": [
+        "internal",
+        "updatable",
+        "require-ac",
+        "supported",
+        "needs-reboot",
+        "usable-during-update",
+        "signed-payload",
+        "can-emulation-tag"
+      ],
+      "Vendor": "KIOXIA",
+      "Version": "11304103",
+      "VersionFormat": "plain",
+      "Serial": "FIXTURE-SERIAL-0001"
+    },
+    {
+      "Name": "ME",
+      "DeviceId": "0000000000000000000000000000000000000000",
+      "Guid": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "Plugin": "intel_me_pci",
+      "Flags": [
+        "internal",
+        "can-emulation-tag"
+      ],
+      "Vendor": "Intel",
+      "Version": "16.1.42.2872",
+      "VersionFormat": "quad"
+    },
+    {
+      "Name": "System Firmware",
+      "DeviceId": "0000000000000000000000000000000000000000",
+      "Guid": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "Plugin": "uefi_capsule",
+      "Flags": [
+        "internal",
+        "updatable",
+        "require-ac",
+        "supported",
+        "needs-reboot",
+        "can-verify",
+        "usable-during-update"
+      ],
+      "Vendor": "Dell",
+      "Version": "1.32.0",
+      "VersionFormat": "dell-bios"
+    },
+    {
+      "Name": "TPM",
+      "DeviceId": "0000000000000000000000000000000000000000",
+      "Guid": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "Plugin": "tpm",
+      "Flags": [
+        "internal",
+        "updatable",
+        "require-ac",
+        "needs-reboot",
+        "self-recovery",
+        "signed-payload",
+        "can-emulation-tag"
+      ],
+      "Vendor": "ST Microelectronics",
+      "Version": "1.769.0.0",
+      "VersionFormat": "quad"
+    },
+    {
+      "Name": "UEFI Device Firmware",
+      "DeviceId": "0000000000000000000000000000000000000000",
+      "Guid": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "Plugin": "uefi_capsule",
+      "Flags": [
+        "internal",
+        "updatable",
+        "require-ac",
+        "needs-reboot",
+        "usable-during-update"
+      ],
+      "Vendor": null,
+      "Version": "24884",
+      "VersionFormat": "number"
+    },
+    {
+      "Name": "UEFI Device Firmware",
+      "DeviceId": "0000000000000000000000000000000000000000",
+      "Guid": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "Plugin": "uefi_capsule",
+      "Flags": [
+        "internal",
+        "updatable",
+        "require-ac",
+        "needs-reboot",
+        "usable-during-update"
+      ],
+      "Vendor": null,
+      "Version": "288375043",
+      "VersionFormat": "number"
+    },
+    {
+      "Name": "UEFI dbx",
+      "DeviceId": "0000000000000000000000000000000000000000",
+      "Guid": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "Plugin": "uefi_dbx",
+      "Flags": [
+        "internal",
+        "updatable",
+        "supported",
+        "needs-reboot",
+        "usable-during-update",
+        "only-version-upgrade",
+        "signed-payload",
+        "can-emulation-tag"
+      ],
+      "Vendor": "Microsoft",
+      "Version": "20230501",
+      "VersionFormat": "number"
+    }
+  ]
+}

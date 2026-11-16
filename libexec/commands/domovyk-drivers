@@ -1,0 +1,202 @@
+#!/bin/bash
+# domovyk:summary=Show devices, drivers, ubuntu-drivers candidates, DKMS and Secure Boot
+# domovyk:tier=read
+# domovyk:args=[--json] [--raw]
+# domovyk:examples=domovyk drivers | domovyk drivers --json
+# shellcheck disable=SC2016 # jq programs and dpkg-query formats are single-quoted on purpose
+#
+# Requirement 9. PCI and USB devices come from sysfs, with names from lspci
+# and lsusb; candidates from ubuntu-drivers (which needs no root in list
+# mode), installed state from dpkg-query; DKMS state from dkms status and the
+# build logs under /var/lib/dkms; Secure Boot and pending MOK keys from
+# mokutil; firmware versions from fwupdmgr. Serial numbers and GUIDs are left
+# out on purpose.
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+dv_init domovyk.drivers.v1 "" "$@"
+((${#DV_ARGS[@]} == 0)) || dv_usage "unexpected argument: ${DV_ARGS[0]}"
+
+body=$DV_TMP/body.json
+empty=$DV_TMP/empty
+: >"$empty"
+
+# sysval <file>: the first line of a sysfs attribute, tabs made spaces.
+sysval() {
+  local v=""
+  IFS= read -r v <"$1" 2>/dev/null || true
+  printf '%s' "${v//$'\t'/ }"
+}
+
+# --- 9.1: PCI and USB devices --------------------------------------------------
+pci=$DV_TMP/pci.tsv usb=$DV_TMP/usb.tsv
+: >"$pci"
+: >"$usb"
+for d in "$(dv_path /sys/bus/pci/devices)"/*; do
+  [[ -r $d/vendor ]] || continue
+  drv=""
+  if [[ -L $d/driver ]]; then
+    drv=$(readlink -- "$d/driver")
+    drv=${drv##*/}
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\n' "${d##*/}" "$(sysval "$d/vendor")" "$(sysval "$d/device")" \
+    "$(sysval "$d/class")" "$drv" >>"$pci"
+done
+for d in "$(dv_path /sys/bus/usb/devices)"/*; do
+  [[ -r $d/idVendor ]] || continue
+  # The kernel drivers of a USB device are bound to its interfaces.
+  drivers=""
+  for i in "$d"/*:*; do
+    [[ -L $i/driver ]] || continue
+    drv=$(readlink -- "$i/driver")
+    drv=${drv##*/}
+    [[ ,$drivers, == *",$drv,"* ]] || drivers+=${drivers:+,}$drv
+  done
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${d##*/}" "$(sysval "$d/idVendor")" \
+    "$(sysval "$d/idProduct")" "$(sysval "$d/busnum")" "$(sysval "$d/devnum")" \
+    "$(sysval "$d/bDeviceClass")" "$(sysval "$d/manufacturer")" "$(sysval "$d/product")" \
+    "$drivers" >>"$usb"
+done
+
+pcinames=$empty usbnames=$empty
+# -D prints the PCI domain, so slots match the sysfs names.
+dv_source lspci --package pciutils -- lspci -mm -nn -D && pcinames=$DV_OUT
+dv_source lsusb --package usbutils -- lsusb && usbnames=$DV_OUT
+
+devices=$DV_TMP/devices.json
+jq -n --rawfile pci "$pci" --rawfile usb "$usb" --rawfile pn "$pcinames" --rawfile un "$usbnames" '
+  def hex: ascii_downcase | ltrimstr("0x");
+  def nz: if . == "" then null else . end;
+  def rows: split("\n") | map(select(. != "") | split("\t"));
+  def bare: sub(" \\[[0-9a-f]{4}\\]$"; "");
+  ($pn | split("\n") | map(capture("^(?<slot>\\S+) \"(?<class>[^\"]*)\" \"(?<vendor>[^\"]*)\" \"(?<device>[^\"]*)\"")
+      | {key: .slot, value: {class_name: (.class | bare), vendor: (.vendor | bare), name: (.device | bare)}})
+    | from_entries) as $pcin
+  | ($un | split("\n")
+      | map(capture("^Bus (?<bus>[0-9]+) Device (?<dev>[0-9]+): ID [0-9a-fA-F]{4}:[0-9a-fA-F]{4} ?(?<name>.*)$")
+        | {key: "\(.bus | tonumber):\(.dev | tonumber)", value: (.name | nz)})
+    | from_entries) as $usbn
+  | [($pci | rows[] | $pcin[.[0]] as $n
+      | {bus: "pci", address: .[0], vendor_id: (.[1] | hex), product_id: (.[2] | hex),
+         class: (.[3] | hex | .[0:4] | nz), class_name: ($n.class_name // null),
+         vendor: ($n.vendor // null), name: ($n.name // null), driver: (.[4] | nz)}),
+     ($usb | rows[]
+      | {bus: "usb", address: .[0], vendor_id: (.[1] | hex), product_id: (.[2] | hex),
+         class: (.[5] | hex | nz), class_name: null, vendor: (.[6] | nz),
+         name: ($usbn["\(.[3] | tonumber? // 0):\(.[4] | tonumber? // 0)"] // (.[7] | nz)),
+         driver: (.[8] | nz)})]' >"$devices" || dv_die devices "cannot build the device list"
+
+# --- 9.2: ubuntu-drivers candidates ------------------------------------------
+candidates=$DV_TMP/candidates.json
+echo null >"$candidates"
+if dv_have ubuntu-drivers ubuntu-drivers-common; then
+  list=$empty rec=$empty
+  if dv_source ubuntu-drivers -- ubuntu-drivers list; then
+    list=$DV_OUT
+    dv_source ubuntu-drivers -- ubuntu-drivers list --recommended && rec=$DV_OUT
+  fi
+  # "nvidia-driver-580, (kernel modules provided by linux-modules-nvidia-580-generic)"
+  parse='split("\n") | map(capture("^(?<package>[a-z0-9][a-z0-9+.~-]+)(, \\(kernel modules provided by (?<modules>[^)]+)\\))?\\s*$")) | unique_by(.package)'
+  pkgs=()
+  mapfile -t pkgs < <(jq -rn --rawfile l "$list" --rawfile r "$rec" "(\$l, \$r) | $parse | .[].package" | sort -u)
+  status=$empty
+  if ((${#pkgs[@]})); then
+    dv_source dpkg-query --package dpkg -- \
+      dpkg-query -W --showformat='${Package}\t${db:Status-Status}\t${Version}\n' "${pkgs[@]}" &&
+      status=$DV_OUT
+  fi
+  jq -n --rawfile l "$list" --rawfile r "$rec" --rawfile s "$status" "
+    (\$r | $parse | map(.package)) as \$recommended
+    | (\$s | split(\"\n\") | map(select(. != \"\") | split(\"\t\")
+        | {key: .[0], value: {status: .[1], version: .[2]}}) | from_entries) as \$st
+    | [(\$l, \$r) | $parse | .[]] | unique_by(.package)
+    | map(\$st[.package] as \$p
+      | {package, installed: ((\$p.status // \"\") | IN(\"installed\", \"triggers-pending\", \"triggers-awaited\")),
+         recommended: (.package | IN(\$recommended[])), version: (\$p.version // null),
+         kernel_modules: (.modules // null)})" >"$candidates" || dv_die candidates "cannot parse ubuntu-drivers"
+fi
+
+# --- 9.3 and 9.5: DKMS -----------------------------------------------------------
+dkms=$DV_TMP/dkms.json
+echo null >"$dkms"
+running=$(sysval "$(dv_path /proc/sys/kernel/osrelease)")
+[[ -n $running ]] || running=$(uname -r)
+arch=$(uname -m)
+if dv_have dkms dkms && dv_source dkms -- dkms status; then
+  # dkms 3: "ipu6-drivers/0~git2026, 7.0.0-43-generic, x86_64: installed (Original modules exist)"
+  # dkms 2: "nvidia, 535.104.05, 6.5.0-14-generic, x86_64: installed"; "nvidia/535: added"
+  entries=$DV_TMP/dkms-entries.json
+  jq -Rn '[inputs
+    | capture("^(?<module>[^/, ]+)[/,] ?(?<version>[^,:]+)(, (?<kernel>[^,:]+), (?<arch>[^,:]+))?: (?<state>[A-Za-z-]+) ?(?<detail>.*)$")
+    | {module, version, kernel, arch, state,
+       detail: (.detail | sub("^\\("; "") | sub("\\)$"; "") | if . == "" then null else . end),
+       log: null}]' "$DV_OUT" >"$entries"
+  # A module/version that is neither built nor installed for the running
+  # kernel failed to build when dkms left a make.log, and was never built
+  # for this kernel otherwise.
+  checks=$DV_TMP/dkms-checks.tsv
+  : >"$checks"
+  while IFS=$'\t' read -r m v; do
+    [[ $m == *..* || $m == */* || $v == *..* || $v == */* ]] && continue
+    log=""
+    for p in "/var/lib/dkms/$m/$v/build/make.log" "/var/lib/dkms/$m/$v/$running/$arch/log/make.log"; do
+      if [[ -f $(dv_path "$p") ]]; then
+        log=$p
+        break
+      fi
+    done
+    printf '%s\t%s\t%s\n' "$m" "$v" "$log" >>"$checks"
+  done < <(jq -r --arg k "$running" '
+    group_by([.module, .version])[]
+    | select(any(.[]; .kernel == $k and (.state | IN("installed", "built"))) | not)
+    | "\(.[0].module)\t\(.[0].version)"' "$entries")
+  jq -n --slurpfile e "$entries" --rawfile c "$checks" --arg k "$running" --arg a "$arch" '
+    ($c | split("\n") | map(select(. != "") | split("\t")
+      | {module: .[0], version: .[1], kernel: $k, arch: $a,
+         state: (if .[2] == "" then "not-built" else "build-failed" end), detail: null,
+         log: (if .[2] == "" then null else .[2] end)})) as $missing
+    # A synthetic entry replaces the kernel-less "added" line of its module.
+    | ($missing | map("\(.module)/\(.version)")) as $ids
+    | ($missing | map(. as $m | if any($e[0][]; .kernel == null and .module == $m.module
+          and .version == $m.version) then .detail = "added" else . end)) as $missing
+    | {kernel: $k,
+       modules: ([$e[0][] | select(.kernel != $k or (.state | IN("installed", "built")))
+                  | select(.kernel != null or ("\(.module)/\(.version)" | IN($ids[]) | not))] + $missing
+         | sort_by(.module, .version, .kernel // ""))}' >"$dkms" || dv_die dkms "cannot parse dkms status"
+fi
+
+# --- 9.3: Secure Boot and MOK ------------------------------------------------------
+sb_state=unknown mok_pending=null mok_keys=null
+if dv_have mokutil mokutil; then
+  if dv_source mokutil -- mokutil --sb-state; then
+    if grep -q '^SecureBoot enabled' "$DV_OUT"; then
+      sb_state=enabled
+    elif grep -q '^SecureBoot disabled' "$DV_OUT"; then
+      sb_state=disabled
+    fi
+  fi
+  # Keys waiting for enrolment at the next boot, one "[key N]" block each.
+  if dv_source "mokutil --list-new" -- mokutil --list-new; then
+    if ((DV_RC == 0)) || grep -q 'is empty' "$DV_OUT" "$DV_ERR"; then
+      mok_keys=$(grep -c '^\[key [0-9]*\]' "$DV_OUT" || true)
+      mok_pending=false
+      ((mok_keys > 0)) && mok_pending=true
+    fi
+  fi
+fi
+
+# --- 9.4: fwupd devices --------------------------------------------------------------
+firmware=$DV_TMP/firmware.json
+echo null >"$firmware"
+if dv_have fwupdmgr fwupd && dv_source fwupdmgr -- fwupdmgr get-devices --json; then
+  jq '[.Devices[]? | {name: (.Name // null), vendor: (.Vendor // null), version: (.Version // null),
+        plugin: (.Plugin // null), updatable: ((.Flags // []) | index("updatable") != null)}]
+      | sort_by(.name // "")' "$DV_OUT" >"$firmware" 2>/dev/null || echo null >"$firmware"
+fi
+
+jq -n --slurpfile d "$devices" --slurpfile c "$candidates" --slurpfile k "$dkms" \
+  --slurpfile f "$firmware" --arg sb "$sb_state" --argjson mp "$mok_pending" --argjson mk "$mok_keys" '
+  {devices: $d[0], candidates: $c[0], dkms: $k[0],
+   secure_boot: {state: $sb, mok_pending: $mp, mok_new_keys: $mk},
+   firmware_devices: $f[0]}' >"$body" || dv_die assemble "cannot build the drivers document"
+dv_emit "$body"

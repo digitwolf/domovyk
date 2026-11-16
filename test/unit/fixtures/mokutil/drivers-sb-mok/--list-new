@@ -1,0 +1,11 @@
+[key 1]
+SHA1 Fingerprint: 00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00:11:22:33
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: CN=Fixture Secure Boot Module Signature key
+        Validity
+            Not Before: Nov 13 21:10:00 2026 GMT
+            Not After : Nov 10 21:10:00 2036 GMT
+        Subject: CN=Fixture Secure Boot Module Signature key

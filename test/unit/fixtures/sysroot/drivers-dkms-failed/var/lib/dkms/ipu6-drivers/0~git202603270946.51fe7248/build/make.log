@@ -1,0 +1,10 @@
+DKMS (dkms-3.2.2) make.log for ipu6-drivers/0~git202603270946.51fe7248 for kernel 7.0.0-43-generic (x86_64)
+Fri Nov 13 09:12:03 PM UTC 2026
+
+Building module(s)
+# command: make -j16 KERNELRELEASE=7.0.0-43-generic KERNEL_SRC=/lib/modules/7.0.0-43-generic/build
+/var/lib/dkms/ipu6-drivers/0~git202603270946.51fe7248/build/drivers/media/i2c/ov02c10.c:812:9: error: implicit declaration of function 'v4l2_subdev_get_try_format' [-Wimplicit-function-declaration]
+make[2]: *** [scripts/Makefile.build:287: drivers/media/i2c/ov02c10.o] Error 1
+
+# exit code: 2
+# elapsed time: 00:00:41
