@@ -1,0 +1,312 @@
+#!/bin/bash
+# domovyk:summary=Show journal errors, OOM kills, kernel oopses and suspend failures
+# domovyk:tier=read
+# domovyk:args=[--boot <n>] [--unit <unit>] [--json] [--raw]
+# domovyk:examples=domovyk logs | domovyk logs --boot -1 | domovyk logs --unit ssh.service --json
+# shellcheck disable=SC2016 # jq programs are single-quoted on purpose
+#
+# Requirement 11. Without --unit: entries of priority err or worse from one
+# boot, grouped by unit, identifier and priority, with the count, the first
+# and last time and the newest message (schema domovyk.logs.v1). With --unit:
+# the last 200 entries of one unit, newest last (schema domovyk.logs-unit.v1).
+# --boot takes an offset (0 is the current boot, -1 the previous one) or a
+# positive index counted from the oldest boot, as journalctl -b does.
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+
+schema=domovyk.logs.v1 render=logs
+for a in "$@"; do
+  [[ $a == --unit || $a == --unit=* ]] && schema=domovyk.logs-unit.v1 render=logs-unit
+done
+dv_init "$schema" "$render" "$@"
+
+boot="" unit="" have_unit=0
+set -- "${DV_ARGS[@]}"
+while (($#)); do
+  case $1 in
+    --boot)
+      (($# >= 2)) || dv_usage "--boot needs a value, such as 0 or -1"
+      boot=$2
+      shift 2
+      ;;
+    --boot=*)
+      boot=${1#--boot=}
+      shift
+      ;;
+    --unit)
+      (($# >= 2)) || dv_usage "--unit needs a unit name, such as ssh.service"
+      unit=$2 have_unit=1
+      shift 2
+      ;;
+    --unit=*)
+      unit=${1#--unit=} have_unit=1
+      shift
+      ;;
+    *) dv_usage "unexpected argument: $1" ;;
+  esac
+done
+
+boot_given=0
+if [[ -n $boot ]]; then
+  [[ $boot =~ ^-?[0-9]{1,6}$ ]] ||
+    dv_usage "--boot takes a boot offset (0, -1, ...) or a positive boot index, not '$boot'"
+  n=$((10#${boot#-}))
+  [[ $boot == -* ]] && n=$((-n))
+  boot=$n boot_given=1
+else
+  boot=0
+fi
+if ((have_unit)); then
+  [[ -n $unit && $unit != -* && $unit =~ ^[^[:space:]/]+$ && ${#unit} -le 256 ]] ||
+    dv_usage "--unit takes a unit name such as ssh.service, not '$unit'"
+fi
+
+# jq helpers shared by every program below.
+# MESSAGE is a string, or an array of bytes when it holds bytes that are not
+# printable UTF-8 (journalctl -o json); utf8 decodes such an array and turns
+# invalid sequences into U+FFFD. clean drops ANSI colour sequences and control
+# characters other than tab and newline.
+JQ_DEFS='
+def utf8:
+  . as $b
+  | [foreach range(0; length) as $i ({need: 0, cp: 0, out: null};
+      $b[$i] as $x
+      | if .need > 0 and $x >= 128 and $x < 192 then
+          .cp = .cp * 64 + $x - 128 | .need -= 1
+          | .out = (if .need == 0 then .cp else null end)
+        elif $x < 128 then {need: 0, cp: 0, out: $x}
+        elif $x >= 194 and $x < 224 then {need: 1, cp: ($x - 192), out: null}
+        elif $x >= 224 and $x < 240 then {need: 2, cp: ($x - 224), out: null}
+        elif $x >= 240 and $x < 245 then {need: 3, cp: ($x - 240), out: null}
+        else {need: 0, cp: 0, out: 65533}
+        end;
+      .out | select(. != null)
+      | if . > 1114111 or (. >= 55296 and . < 57344) then 65533 else . end)]
+  | implode;
+def clean: gsub("\\x1b\\[[0-9;?]*[ -/]*[@-~]"; "") | gsub("[\\x00-\\x08\\x0b-\\x1f\\x7f]"; "");
+def text:
+  if type == "array" then utf8 elif type == "string" then . elif . == null then "" else tostring end
+  | clean;
+def cap($n): if length > $n then .[0:($n - 1)] + "…" else . end;
+def us: tonumber? // 0;
+def ts: us / 1000000 | floor | todate;
+def prio: tonumber? // 6;
+'
+
+body=$DV_TMP/body.json
+empty=$DV_TMP/empty.json
+: >"$empty"
+
+# journalctl prints a hint on stderr when it can read only the caller's own
+# journal, or no journal at all (requirement 11.5).
+sys_perm=0
+check_journal_access() {
+  ((sys_perm == 0)) || return 0
+  if grep -qE 'not seeing messages from|journal files were not opened|No journal files were opened' "$DV_ERR"; then
+    sys_perm=1
+    dv_unavailable system-journal permission "" "adm or systemd-journal group"
+  fi
+}
+
+# jrnl <file-variable> <journalctl args...>: runs journalctl as a Source and
+# stores its stdout path in the named variable (an empty file on failure).
+jrnl() {
+  local -n _out=$1
+  shift
+  _out=$empty
+  dv_source journalctl -- journalctl "$@" || return 0
+  check_journal_access
+  _out=$DV_OUT
+}
+
+have_journal=0
+dv_have journalctl systemd && have_journal=1
+
+# The boot list, to resolve --boot and to report the boot's time span.
+boots_file=$empty
+((have_journal)) && jrnl boots_file --list-boots -o json --no-pager
+boots=$(jq -c 'if type == "array" then . else [] end' "$boots_file" 2>/dev/null) || boots='[]'
+[[ -n $boots ]] || boots='[]'
+sel=$(jq -c --argjson b "$boot" '
+  sort_by(.index | tonumber? // 0)
+  | (if $b > 0 then .[$b - 1] else map(select((.index | tonumber? // 1) == $b)) | first end) // null' \
+  <<<"$boots")
+if [[ $sel == null ]] && ((boot_given)) && [[ $boots != '[]' ]]; then
+  span=$(jq -r 'map(.index | tonumber? // 0) | "\(min) to \(max)"' <<<"$boots")
+  dv_usage "no boot $boot in the journal, which holds boots $span"
+fi
+
+if ((have_unit)); then
+  fields=_SYSTEMD_UNIT,_SYSTEMD_USER_UNIT,SYSLOG_IDENTIFIER,_COMM,_PID,SYSLOG_PID,PRIORITY,MESSAGE
+  bargs=()
+  ((boot_given)) && bargs=(-b "$boot")
+  scope=null out=$empty
+  if ((have_journal)); then
+    # A system unit first; a user unit of the caller's manager otherwise.
+    jrnl out -u "$unit" "${bargs[@]}" -n 200 -o json --no-pager --output-fields="$fields"
+    if [[ -s $out ]]; then
+      scope='"system"'
+    else
+      jrnl out --user-unit "$unit" "${bargs[@]}" -n 200 -o json --no-pager --output-fields="$fields"
+      [[ -s $out ]] && scope='"user"'
+    fi
+  fi
+  bootjson=null
+  ((boot_given)) && bootjson=$boot
+  jq -n --arg unit "$unit" --argjson scope "$scope" --argjson boot "$bootjson" "$JQ_DEFS"'
+    [inputs | {
+      t: (.__REALTIME_TIMESTAMP | us),
+      priority: (.PRIORITY | prio),
+      identifier: (.SYSLOG_IDENTIFIER // ._COMM // null),
+      pid: ((._PID // .SYSLOG_PID // null) | if . == null then null else tonumber? // null end),
+      message: (.MESSAGE | text | cap(2000))}]
+    | sort_by(.t) | .[-200:]
+    | {unit: {name: $unit, scope: $scope, boot: $boot, limit: 200},
+       entries: map({time: (.t / 1000000 | floor | todate)} + del(.t))}' \
+    "$out" >"$body" || dv_die parse "journal entries of $unit are not valid JSON"
+  dv_emit "$body"
+  exit 0
+fi
+
+# 11.1: errors of the boot, grouped.
+errors=$empty events=$empty tail=$empty usage=$empty
+if ((have_journal)); then
+  jrnl errors -b "$boot" -p err -o json --no-pager \
+    --output-fields=_SYSTEMD_UNIT,_SYSTEMD_USER_UNIT,SYSLOG_IDENTIFIER,_COMM,PRIORITY,MESSAGE
+  # 11.4: OOM kills, kernel warnings and oopses, suspend and resume. The
+  # pattern only narrows what journalctl returns; jq below decides. It holds
+  # capitals, so journalctl matches it case-sensitively.
+  jrnl events -b "$boot" -t kernel -t systemd-sleep -t systemd-oomd -o json --no-pager \
+    --output-fields=SYSLOG_IDENTIFIER,PRIORITY,MESSAGE \
+    --grep 'Killed process|Killed .* due to|WARNING: |BUG: |Oops|general protection fault|Kernel panic|soft lockup|hard LOCKUP|blocked for more than|stall|Call Trace:|PM: |Freezing|Failed to|failed to'
+  # 11.2: the last entries of an earlier boot tell how it ended.
+  offset=$(jq -r 'if . == null then empty else .index end' <<<"$sel")
+  if [[ -z $offset ]] && ((boot <= 0)); then offset=$boot; fi
+  if [[ -n $offset ]] && ((offset < 0)); then
+    jrnl tail -b "$boot" -n 100 -o json --no-pager --output-fields=SYSLOG_IDENTIFIER,MESSAGE_ID,MESSAGE
+  fi
+  jrnl usage --disk-usage --no-pager
+fi
+
+groups=$DV_TMP/groups.json facts=$DV_TMP/facts.json ending=$DV_TMP/ending.json
+jq -n "$JQ_DEFS"'
+  reduce inputs as $e ({};
+    ($e._SYSTEMD_USER_UNIT // $e._SYSTEMD_UNIT) as $unit
+    | ($e.SYSLOG_IDENTIFIER // $e._COMM) as $id
+    | ($e.PRIORITY | prio) as $p
+    | ($e.__REALTIME_TIMESTAMP | us) as $t
+    | ([$unit // "", $e._SYSTEMD_USER_UNIT != null, $id // "", $p] | tojson) as $key
+    | .[$key] |= (
+        (. // {unit: $unit, user: ($e._SYSTEMD_USER_UNIT != null), identifier: $id, priority: $p,
+               count: 0, f: $t, l: $t, m: $e.MESSAGE})
+        | .count += 1
+        | if $t < .f then .f = $t else . end
+        | if $t >= .l then .l = $t | .m = $e.MESSAGE else . end))
+  | [.[] | {unit, user, identifier, priority, count,
+            first: (.f / 1000000 | floor | todate), last: (.l / 1000000 | floor | todate),
+            message: (.m | text | cap(500))}]
+  | sort_by(.priority, -.count, .unit // "", .identifier // "")' \
+  "$errors" >"$groups" || dv_die parse "journal errors are not valid JSON"
+
+jq -n "$JQ_DEFS"'
+  def kind:
+    if test("^Kernel panic") then "panic"
+    elif test("soft lockup|hard LOCKUP") then "lockup"
+    elif test("blocked for more than [0-9]+ seconds") then "hung-task"
+    elif test("^rcu: .*stall|self-detected stall|detected stalls") then "stall"
+    elif test("^WARNING: ") then "warning"
+    elif test("^BUG: |^kernel BUG at ") then "bug"
+    elif test("^Oops|^general protection fault") then "oops"
+    elif test("^Call Trace:") then "call-trace"
+    else null end;
+  def pm_failure: test("(^|: )PM: .*([Ff]ail|aborted|returns -[0-9])|^Freezing .*failed after");
+  def item: {time: (.t / 1000000 | floor | todate), message: (.m | cap(300))};
+  [inputs | {id: (.SYSLOG_IDENTIFIER // ""), p: (.PRIORITY | prio), t: (.__REALTIME_TIMESTAMP | us),
+             m: (.MESSAGE | text)}]
+  | sort_by(.t) as $all
+  | [$all[] | select(.id == "kernel")] as $k
+  | {
+    oom_kills: (
+      [$all[] | select(.id == "kernel" and .p <= 3)
+        | (.m | capture("Killed process (?<pid>[0-9]+) \\((?<process>[^)]*)\\)")) as $c
+        | item + {source: "kernel", process: $c.process, pid: ($c.pid | tonumber)}]
+      + [$all[] | select(.id == "systemd-oomd")
+        | (.m | capture("^Killed (?<cgroup>\\S+) due to")) as $c
+        | item + {source: "systemd-oomd", process: ($c.cgroup | split("/") | last), pid: null}]
+      | sort_by(.time)),
+    # A WARNING or BUG line opens an event. An "Oops" or "Call Trace:" line
+    # within 5 s of the previous event belongs to it; a later one stands alone.
+    kernel: (
+      [$k[] | select(.p <= 4) | (.m | kind) as $kind | select($kind != null) | . + {kind: $kind}]
+      | reduce .[] as $e ([];
+          if ($e.kind == "oops" or $e.kind == "call-trace") and length > 0
+            and ($e.t - .[-1].t) <= 5000000
+          then . else . + [$e] end)
+      | {count: length, events: (.[:20] | map(item + {kind}))}),
+    # Failure lines less than 30 s apart belong to one failed cycle.
+    suspend: (
+      [($k[] | select(.m | pm_failure) | . + {source: "kernel"}),
+       ($all[] | select(.id == "systemd-sleep"
+          and (.p <= 3 or (.m | test("^Failed to (put system to sleep|suspend|hibernate)"))))
+        | . + {source: "systemd-sleep"})]
+      | sort_by(.t) as $f
+      | {cycles: ([$k[] | select(.m | test("^PM: suspend entry|^PM: hibernation: hibernation entry"))] | length),
+         resumes: ([$k[] | select(.m | test("^PM: suspend exit|^PM: hibernation: hibernation exit"))] | length),
+         failed: ($f | reduce .[] as $e ({n: 0, last: null};
+                    (if .last == null or ($e.t - .last) > 30000000 then .n += 1 else . end) | .last = $e.t)
+                  | .n),
+         failures: ($f[:20] | map(item + {source}))})
+  }' "$events" >"$facts" || dv_die parse "journal kernel entries are not valid JSON"
+
+# How an earlier boot ended (11.2). It ended cleanly when its last 100 entries
+# show a shutdown, reboot or kexec under way: a systemd-shutdown line, PID 1's
+# "Shutting down." or a shutdown, final, poweroff, reboot, halt or kexec
+# target, logind's shutdown message (MESSAGE_ID 98268866d1d54a499c4e98921d93bc40)
+# or the kernel's "reboot:" line. Without any of them the journal simply
+# stops: a crash, a power loss or a hard reset. ended_in_suspend says that the
+# last power-management line was a suspend entry with no exit after it, the
+# usual sign of a machine that never woke up.
+jq -n "$JQ_DEFS"'
+  def marker:
+    .id == "systemd-shutdown"
+    or .mid == "98268866d1d54a499c4e98921d93bc40"
+    or (.id == "systemd" and (.m | test("^Shutting down\\.|^Reached target (shutdown|final|poweroff|reboot|halt|kexec)\\.target|^Reached target (System Shutdown|Shutdown|Power-Off|System Power Off|Reboot|System Reboot|System Halt)")))
+    or (.id == "kernel" and (.m | test("^reboot: (Power down|Restarting system|System halted)|^kexec_core: Starting new kernel")));
+  [inputs | {id: (.SYSLOG_IDENTIFIER // ""), mid: (.MESSAGE_ID // ""), m: (.MESSAGE | text)}]
+  | if length == 0 then {clean_shutdown: null, ended_in_suspend: null}
+    else any(.[]; marker) as $clean
+    | {clean_shutdown: $clean,
+       ended_in_suspend: (($clean | not)
+         and ([.[] | select(.id == "kernel" and (.m | test("^PM: suspend (entry|exit)")))]
+              | last | .m // "" | startswith("PM: suspend entry")))}
+    end' "$tail" >"$ending" || dv_die parse "journal tail is not valid JSON"
+
+# "Archived and active journals take up 1.2G in the file system."
+disk=$(sed -n 's/.*take up \([0-9.]*\)\([BKMGTPE]\?\).*/\1 \2/p' "$usage" | head -n 1)
+
+# Without journalctl every journal fact is unknown (null), not empty.
+jq -n --argjson sel "$sel" --argjson boot "$boot" --argjson boots "$boots" --argjson have "$have_journal" \
+  --slurpfile groups "$groups" --slurpfile facts "$facts" --slurpfile ending "$ending" \
+  --arg disk "$disk" "$JQ_DEFS"'
+  ($disk | split(" ")) as $d
+  | {
+    boot: (($sel // {}) as $s
+      | (if $sel == null then (if $boot <= 0 then $boot else null end) else ($s.index | tonumber? // null) end) as $off
+      | {offset: $off, id: ($s.boot_id // null),
+         first: (if $s.first_entry then ($s.first_entry | ts) else null end),
+         last: (if $s.last_entry then ($s.last_entry | ts) else null end),
+         current: (if $off == null then null else $off == 0 end)}
+      + (if $off != null and $off < 0 then $ending[0] else {clean_shutdown: null, ended_in_suspend: null} end)),
+    groups: (if $have == 1 then $groups[0] else null end),
+    oom_kills: (if $have == 1 then $facts[0].oom_kills else null end),
+    kernel: (if $have == 1 then $facts[0].kernel else null end),
+    suspend: (if $have == 1 then $facts[0].suspend else null end),
+    journal: {
+      disk_usage_bytes: (if ($d[0] // "") != "" then
+          ($d[0] | tonumber) * pow(1024; {"": 0, B: 0, K: 1, M: 2, G: 3, T: 4, P: 5, E: 6}[$d[1] // ""])
+          | floor
+        else null end),
+      boots: (if ($boots | length) > 0 then ($boots | length) else null end)}
+  }' >"$body" || dv_die assemble "cannot build the logs document"
+dv_emit "$body"
