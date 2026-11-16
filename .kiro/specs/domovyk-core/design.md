@@ -150,7 +150,7 @@ The first comment block of each Command:
 |---|---|
 | `dv_init <schema>` | Sets the schema id. Starts the Envelope and the `unavailable` list. Installs an EXIT trap that removes `DV_TMPDIRS`. |
 | `dv_have <cmd> <apt-package>` | Returns 0 if `<cmd>` is on PATH. Otherwise records `{source:<cmd>, reason:"missing", package:<apt-package>}` and returns 1. |
-| `dv_source <name> [--timeout s] -- <argv…>` | Runs argv with `timeout --kill-after=2 ${s:-$DOMOVYK_TIMEOUT}`, stdout to a temp file, stderr to a second one. Exit 124 or 137 records `timeout`. A permission error (`EACCES` text, or exit 77 from our own wrappers) records `permission`. Prints the temp file path on success. |
+| `dv_source <name> [--timeout s] -- <argv…>` | Runs argv with `timeout --kill-after=2 ${s:-$DOMOVYK_TIMEOUT}`. Sets `DV_OUT` and `DV_ERR` (temp files holding stdout and stderr) and `DV_RC`. Exit 124 or 137 records `timeout`; a permission error in stderr records `permission`; a missing program records `missing` with `--package`. Returns 1 in those three cases, otherwise 0, also for a nonzero exit, which the caller interprets. |
 | `dv_readable <path> <name>` | Records `permission` for an unreadable path and returns 1. |
 | `dv_mktemp_dir` | Prints a new mode-0700 directory inside the Command's own temporary tree, which the EXIT, INT and TERM traps delete. Safe to call as `$(dv_mktemp_dir)`. |
 | `dv_emit <json-file>` | Merges the Envelope into the JSON. Pipes it through `redact.py --json` unless `DOMOVYK_RAW=1`. Prints it with `--json`, or renders it with `render/<group>.jq`. |
@@ -500,6 +500,39 @@ Decisions made while porting (tasks 1.1–1.4):
 - **`test/run-all`:** stages `shellcheck` (host), `boot` (fresh, not upgraded), `unit` (push, then `test/unit/run`), `shfmt` (`shfmt -d -i 2 -ci` in the unit VM, installed there with apt if missing), `vm-<test>` and `teardown`. Logs go to `~/.cache/domovyk-vm/results/<run-id>/`.
 - **Name clash:** `test/vm/lib.sh` and `libexec/lib/domovyk.sh` both define `dv_init`, `dv_die` and `dv_usage`, so no script may source both.
 - **Unit tests as root:** `harness.bats` skips the tests that run real harness scripts when it runs as root, because the harness refuses root. CI runs the unit tests as root in containers.
+
+### Implementation notes (facts wave, 2026-11-16)
+
+Recorded from the implementation of tasks 7.2, 7.5, 7.6 and 7.8. Field-level shapes are in `test/unit/schemas/<schema>.jq`.
+
+- **drivers:**
+  - PCI names come from `lspci -mm -nn -D`, so slots match sysfs.
+  - USB devices are read from `/sys/bus/usb/devices` as well as `lsusb`.
+  - The installed state comes from one `dpkg-query -W --showformat='${Package}\t${db:Status-Status}\t${Version}\n'` call.
+  - DKMS logs may also sit at `/var/lib/dkms/<m>/<v>/<kernel>/<arch>/log/make.log`.
+  - The running kernel is read from `/proc/sys/kernel/osrelease`, which DOMOVYK_SYSROOT can replace.
+  - DKMS states include the derived `build-failed` and `not-built`.
+- **logs:**
+  - Every journalctl call passes `--output-fields`, which keeps `_HOSTNAME` and `_MACHINE_ID` out.
+  - Kernel, systemd-sleep and systemd-oomd events come from one `-t … --grep` call.
+  - OOM kills include systemd-oomd kills.
+  - `clean_shutdown` uses the last 100 entries of the boot; the heuristic is commented in the code.
+  - `--boot` accepts an offset or a positive index. A boot the journal does not hold is a usage error (exit 2).
+  - Text times are UTC.
+- **perf:**
+  - One `ps` call, sorted twice in jq. It reports `uid`, not user names, and leaves out Domovyk's own `timeout` and `ps`.
+  - Throttling prefers the Intel sysfs counters and falls back to the kernel log.
+  - `--boot` leaves out `.device` units, because their names carry disk serial numbers and EUIs.
+  - Shared time budgets keep the 30 s limit even when several Sources hang.
+- **hw:**
+  - GPUs come from `lspci -vmm -nn -k -D`, with a sysfs fallback.
+  - Batteries are every `power_supply` of type Battery that is not of scope Device and is present. `battery` is a list, or `null`.
+  - Capacities are raw µWh or µAh, with `unit` saying which.
+- **services:**
+  - Uses `systemctl --failed --output=json`, falling back to `list-units --plain` for an older systemctl.
+  - `services status` looks a unit up in the system manager first, then the user manager. An unknown unit is a usage error (exit 2).
+- **Unavailable reasons:** a missing user bus, a power-profiles-daemon that is not running and an absent `/proc/pressure` are recorded as `missing`, with a `hint`. The enum stays `missing`, `permission`, `timeout`.
+- **Open item:** unit names such as `systemd-fsck@dev-disk-by\x2duuid-….service` contain filesystem UUIDs. They are low-risk identifiers that the agent needs in order to refer to the unit, so they are not redacted for now.
 
 ## Data Models
 

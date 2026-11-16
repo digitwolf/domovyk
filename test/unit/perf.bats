@@ -125,7 +125,7 @@ printf "%7s %7s %5s %4s %7s %s\n" "$PPID" "$grand" 1000 100 2048 timeout "$$" "$
   has '.memory.used_percent == 92.5 and .cpu_count == 4'
   run -0 "$DOMOVYK" perf
   assert_line '  memory   some 62.15 48.90 30.12   full 41.02 30.55 18.40'
-  assert_line 'zram       zram0 zstd 1.9G: 1.5G stored in 406.2M'
+  assert_line 'zram       zram0 zstd 1.9G: 1.5G stored in 406.3M'
   fits
 }
 

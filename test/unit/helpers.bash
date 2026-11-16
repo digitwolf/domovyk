@@ -20,6 +20,9 @@ dv_setup() {
 
 # stub <name> <script body>: an executable on PATH for this test only.
 stub() {
+  # Remove first: the name may be a Fake_Bin symlink, and writing through it
+  # would overwrite the shared fake in the repository.
+  rm -f "$STUBS/$1"
   printf '#!/bin/bash\n%s\n' "$2" >"$STUBS/$1"
   chmod +x "$STUBS/$1"
 }

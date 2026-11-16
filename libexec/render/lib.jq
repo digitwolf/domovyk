@@ -9,14 +9,14 @@ def trunc(n): tostring | if length > n then .[0:(n - 1)] + "…" else . end;
 # fit: cut a line to the 100-column limit.
 def fit: trunc(width);
 
-# human: bytes as B, K, M, G, T with one decimal.
+# human: bytes as B, K, M, G, T with one decimal, rounded to nearest.
 def human:
   if . == null then "?"
   else (tonumber) as $b
     | if $b < 1024 then "\($b) B"
       else [["K", 1024], ["M", 1048576], ["G", 1073741824], ["T", 1099511627776]]
         | map(select($b >= .[1])) | last
-        | "\(($b / .[1] * 10 | floor) / 10)\(.[0])"
+        | "\(($b / .[1] * 10 | round) / 10)\(.[0])"
       end
   end;
 

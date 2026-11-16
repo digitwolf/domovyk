@@ -1,6 +1,7 @@
 # Redaction_Rules (requirement 5): name<TAB>pattern<TAB>flags (i = ignore case).
 # A group named "secret" limits the replacement to that group. Order matters:
-# anthropic-key before openai-key, url-password before email.
+# anthropic-key before openai-key, url-password before email. The email rule
+# skips systemd template instances such as user@1000.service.
 # Every secret group refuses to start at an existing marker, so a second pass
 # changes nothing.
 private-key	-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----
@@ -12,4 +13,4 @@ aws-key-id	\b(?:AKIA|ASIA)[A-Z0-9]{16}\b
 github-token	\bgh[pousr]_[A-Za-z0-9]{36,}\b
 anthropic-key	\bsk-ant-[A-Za-z0-9_-]{20,}
 openai-key	\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}
-email	\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b
+email	\b[A-Za-z0-9._%+-]+@(?![A-Za-z0-9.-]*\.(?:service|socket|target|mount|automount|swap|timer|path|slice|scope|device)\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b

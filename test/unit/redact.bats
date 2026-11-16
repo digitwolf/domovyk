@@ -52,3 +52,8 @@ setup() {
   run -1 --separate-stderr "$DOMOVYK_ROOT/bin/domovyk" commands --json
   assert_output ''
 }
+
+@test "systemd template unit names are not mistaken for email addresses" {
+  run -0 "${REDACT[@]}" --rules "$RULES" <<<'user@1000.service getty@tty1.service systemd-coredump@0-4242-0.service a@b.org'
+  assert_output 'user@1000.service getty@tty1.service systemd-coredump@0-4242-0.service [redacted:email]'
+}

@@ -68,7 +68,7 @@ Rules for every task:
 - [ ] 7.1 `domovyk updates`
   - Create `libexec/commands/domovyk-updates`, `libexec/render/updates.jq`, `test/unit/schemas/updates.jq` and `test/unit/updates.bats`. Cases: none pending, security pending, phased, held, broken, stale lists, reboot required with packages, unattended-upgrades failure, fwupd missing.
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
-- [ ] 7.2 `domovyk drivers`
+- [x] 7.2 `domovyk drivers`
   - Create `domovyk-drivers`, `render/drivers.jq`, `schemas/drivers.jq` and `drivers.bats`. Cases: the IPU6 candidate, a DKMS build failure with `make.log`, Secure Boot on with a MOK pending, no `ubuntu-drivers`.
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 - [ ] 7.3 `domovyk crash list` and `crash info`
@@ -77,16 +77,16 @@ Rules for every task:
 - [ ] 7.4 `domovyk crash backtrace`
   - Create `domovyk-crash-backtrace` (temp directory with traps, gdb batch, frame parser, `--symbols`) and `crash-backtrace.bats`, using a fake gdb and fake `apport-unpack`. Cases: unsymbolized frames, `kill -INT` mid-run leaves no directory, no network use without `--symbols`.
   - _Requirements: 3.2, 10.4, 10.5, 10.6, 10.7, 10.8_
-- [ ] 7.5 `domovyk logs`
+- [x] 7.5 `domovyk logs`
   - Create `domovyk-logs` (`--boot`, `--unit`), `render/logs.jq`, the schema predicates and `logs.bats`. Cases: grouped errors, previous boot unclean, OOM, a kernel oops, suspend failure, user-only journal access.
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
-- [ ] 7.6 `domovyk perf`
+- [x] 7.6 `domovyk perf`
   - Create `domovyk-perf` (`--boot`, `--sample`), `render/perf.jq`, `schemas/perf.jq` and `perf.bats`. Cases: pressure, throttling, no power-profiles-daemon, sample bounds.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
 - [ ] 7.7 `domovyk disk` and `disk usage`
   - Create `domovyk-disk`, `domovyk-disk-usage`, `render/disk.jq`, the schema predicates and `disk.bats`. Cases: a full filesystem, every reclaimable category with risk, SMART failing on UDisks2, no Docker access, a `du` timeout marked incomplete.
   - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6_
-- [ ] 7.8 `domovyk services` and `domovyk hw`
+- [x] 7.8 `domovyk services` and `domovyk hw`
   - Create `domovyk-services`, `domovyk-services-status`, `domovyk-hw`, `render/services.jq`, `render/hw.jq`, the schema predicates and `services.bats` and `hw.bats`. Cases: failed system and user units, unit status, no battery, no serials in output.
   - _Requirements: 14.1, 14.2, 14.3, 14.4_
 

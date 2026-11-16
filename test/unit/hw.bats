@@ -60,7 +60,7 @@ machine() {
   has '.battery == [{name: "BAT0", unit: "uAh", design: 8442000, full: 7875000, health_percent: 93.3,
     capacity_percent: 100, status: "Not charging", cycle_count: 34, technology: "Li-poly"}]'
   has '.firmware == {vendor: "Dell Inc.", version: "1.32.0"}'
-  has '.machine == {vendor: "Dell Inc.", model: "Precision 5680"}'
+  has '.machine == {vendor: "Dell Inc.", model: "Example Laptop 15"}'
 }
 
 @test "the hw text view shows each fact and fits in 100 columns (14.3, 4.1)" {
@@ -72,7 +72,7 @@ machine() {
   assert_line '          driver i915, modules i915, xe at 0000:00:02.0'
   assert_line 'battery   BAT0: health 93.3 %, 7.88 Ah of 8.44 Ah design, 100 % charged, not charging, 34 cycles'
   assert_line 'firmware  Dell Inc. 1.32.0'
-  assert_line 'machine   Dell Inc. Precision 5680'
+  assert_line 'machine   Dell Inc. Example Laptop 15'
   fits
 }
 

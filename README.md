@@ -18,7 +18,12 @@ In Ukrainian folklore, the *domovyk* (домовик) is the house spirit who qu
 - Ubuntu know-how;
 - one safe path for every change.
 
-> **Early development.** The core command, the safety guard and the handoff scripts work today. The fact commands, skills and Claude Code plugin are being built now. See [Status](#status). Stars, issues and pull requests are very welcome.
+> **Early development.** These work today:
+> - the `domovyk` command, with facts about drivers, logs, performance, services and hardware;
+> - the safety guard;
+> - the handoff scripts.
+>
+> Updates, crashes, disk space, the skills and the Claude Code plugin are being built now. See [Status](#status). Stars, issues and pull requests are very welcome.
 
 ---
 
@@ -91,7 +96,8 @@ Domovyk is built in three phases. Phase 1 is under way. It is tracked in a publi
 | Handoff scripts: `domovyk handoff create / list / show` | ✅ works |
 | Secret redaction on every output | ✅ works |
 | Guard against `sudo` and destructive commands | ✅ works (wired into Claude Code with the plugin) |
-| Facts: `updates`, `drivers`, `crash`, `logs`, `perf`, `disk`, `services`, `hw` | 🚧 in progress |
+| Facts: `drivers`, `logs`, `perf`, `services`, `hw` | ✅ works |
+| Facts: `updates`, `crash`, `disk` | 🚧 in progress |
 | `domovyk status` and `domovyk doctor` | 🚧 in progress |
 | Skills: ubuntu, diagnose-crash, drivers, updates, disk, performance | 🚧 in progress |
 | Claude Code plugin, `domovyk setup claude`, `domovyk agent` | 🚧 in progress |
@@ -141,10 +147,34 @@ Every command has `--help`, and every read command has `--json`.
 ```text
 $ domovyk commands
 commands               read  List every domovyk command with its tier and summary
+drivers                read  Show devices, drivers, ubuntu-drivers candidates, DKMS and Secure Boot
 handoff create         user  Write a script for the owner to read and run with sudo (never runs it)
 handoff list           read  List handoff scripts, newest first
 handoff show           read  Show one handoff script
+hw                     read  Show CPU, GPUs and drivers, memory, battery health, firmware and model
+logs                   read  Show journal errors, OOM kills, kernel oopses and suspend failures
+perf                   read  Show load, memory, pressure, top processes, thermals and power profile
+services               read  List failed system and user units with their result and journal tail
+services status        read  Show a unit's state, enablement, main PID, memory, restarts and journal
 version                read  Show the domovyk version and where it runs from
+```
+
+For example, on a small test VM:
+
+```text
+$ domovyk perf
+load       0.61 0.52 0.27 (1, 5, 15 min), 1/180 running, 4 CPUs
+memory     539.4M used of 5.8G (9.1 %), 5.3G available
+swap       none
+pressure   % of time stalled, avg10 avg60 avg300
+  cpu      some 0.20 0.49 0.36   full 0.00 0.00 0.00
+  memory   some 0.00 0.00 0.00   full 0.00 0.00 0.00
+  io       some 0.00 0.00 0.09   full 0.00 0.00 0.08
+
+top cpu (ps: average since each process started)
+       PID    UID   CPU%      RSS  COMMAND
+     84097      0    3.5    11.9M  sshd-session
+…
 ```
 
 Each command has a **tier**:
