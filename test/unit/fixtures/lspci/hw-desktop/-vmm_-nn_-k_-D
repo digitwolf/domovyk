@@ -1,0 +1,44 @@
+Slot:	0000:00:00.0
+Class:	Host bridge [0600]
+Vendor:	Advanced Micro Devices, Inc. [AMD] [1022]
+Device:	Device [14d8]
+SVendor:	Micro-Star International Co., Ltd. [MSI] [1462]
+SDevice:	Device [7e26]
+IOMMUGroup:	0
+
+Slot:	0000:01:00.0
+Class:	VGA compatible controller [0300]
+Vendor:	NVIDIA Corporation [10de]
+Device:	AD104 [GeForce RTX 4070] [2786]
+SVendor:	Micro-Star International Co., Ltd. [MSI] [1462]
+SDevice:	Device [5125]
+Rev:	a1
+Driver:	nvidia
+Module:	nvidiafb
+Module:	nouveau
+Module:	nvidia_drm
+Module:	nvidia
+IOMMUGroup:	12
+
+Slot:	0000:01:00.1
+Class:	Audio device [0403]
+Vendor:	NVIDIA Corporation [10de]
+Device:	AD104 High Definition Audio Controller [22bc]
+SVendor:	Micro-Star International Co., Ltd. [MSI] [1462]
+SDevice:	Device [5125]
+Rev:	a1
+Driver:	snd_hda_intel
+Module:	snd_hda_intel
+IOMMUGroup:	12
+
+Slot:	0000:12:00.0
+Class:	Display controller [0380]
+Vendor:	Advanced Micro Devices, Inc. [AMD/ATI] [1002]
+Device:	Raphael [164e]
+SVendor:	Micro-Star International Co., Ltd. [MSI] [1462]
+SDevice:	Device [7e26]
+Rev:	c1
+ProgIf:	00
+Module:	amdgpu
+IOMMUGroup:	20
+

@@ -1,0 +1,48 @@
+processor	: 0
+vendor_id	: AuthenticAMD
+cpu family	: 25
+model		: 97
+model name	: AMD Ryzen 7 7700X 8-Core Processor
+physical id	: 0
+siblings	: 4
+core id		: 0
+cpu cores	: 2
+flags		: fpu vme de pse tsc msr pae mce cx8 apic sep
+power management: ts ttp tm hwpstate
+
+processor	: 1
+vendor_id	: AuthenticAMD
+cpu family	: 25
+model		: 97
+model name	: AMD Ryzen 7 7700X 8-Core Processor
+physical id	: 0
+siblings	: 4
+core id		: 0
+cpu cores	: 2
+flags		: fpu vme de pse tsc msr pae mce cx8 apic sep
+power management: ts ttp tm hwpstate
+
+processor	: 2
+vendor_id	: AuthenticAMD
+cpu family	: 25
+model		: 97
+model name	: AMD Ryzen 7 7700X 8-Core Processor
+physical id	: 0
+siblings	: 4
+core id		: 1
+cpu cores	: 2
+flags		: fpu vme de pse tsc msr pae mce cx8 apic sep
+power management: ts ttp tm hwpstate
+
+processor	: 3
+vendor_id	: AuthenticAMD
+cpu family	: 25
+model		: 97
+model name	: AMD Ryzen 7 7700X 8-Core Processor
+physical id	: 0
+siblings	: 4
+core id		: 1
+cpu cores	: 2
+flags		: fpu vme de pse tsc msr pae mce cx8 apic sep
+power management: ts ttp tm hwpstate
+

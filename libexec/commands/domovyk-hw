@@ -1,0 +1,140 @@
+#!/bin/bash
+# domovyk:summary=Show CPU, GPUs and drivers, memory, battery health, firmware and model
+# domovyk:tier=read
+# domovyk:args=[--json] [--raw]
+# domovyk:examples=domovyk hw | domovyk hw --json
+#
+# Hardware facts (requirement 14.3). Reads only the four DMI files named
+# below, never product_serial, product_uuid, board_serial or a battery's
+# serial_number, so no serial number or UUID reaches the output. Without a
+# battery, battery is null and nothing is reported missing (14.4).
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+dv_init domovyk.hw.v1 "" "$@"
+((${#DV_ARGS[@]} == 0)) || dv_usage "unexpected argument: ${DV_ARGS[0]}"
+shopt -s nullglob
+
+# rd <file>: prints the first line of a file; fails when it cannot be read.
+rd() {
+  local line=""
+  { IFS= read -r line || [[ -n $line ]]; } 2>/dev/null <"$1" || return 1
+  printf '%s' "$line"
+}
+
+# file_source <path>: prints where to read a file Source, or records it as
+# unavailable (missing or permission) and fails.
+file_source() {
+  local p
+  p=$(dv_path "$1")
+  if [[ -r $p ]]; then
+    printf '%s' "$p"
+    return 0
+  fi
+  if [[ -e $p ]]; then dv_unavailable "$1" permission; else dv_unavailable "$1" missing; fi
+  return 1
+}
+
+P=$DV_TMP/parts
+mkdir "$P"
+part() { jq -cs --arg k "$1" '{($k): (if length == 0 then null else .[0] end)}' >"$P/$1.json"; }
+
+# --- CPU and memory -----------------------------------------------------------
+
+if f=$(file_source /proc/cpuinfo); then
+  jq -Rs 'split("\n\n") | map(split("\n") | map(capture("^(?<key>[^\t:]+?)\\s*: ?(?<value>.*)$"))
+      | from_entries) | map(select(has("processor"))) as $c
+    | if ($c | length) == 0 then null else
+      {model: ($c | map(.["model name"] // empty) | first // null),
+       sockets: ($c | map(.["physical id"] // empty) | unique | length | if . == 0 then null else . end),
+       cores: ($c | map(select(.["core id"]) | [.["physical id"], .["core id"]]) | unique | length
+         | if . == 0 then null else . end),
+       threads: ($c | length)} end' "$f"
+fi | part cpu
+
+if f=$(file_source /proc/meminfo); then
+  jq -Rn '[inputs | capture("^MemTotal:\\s+(?<kb>[0-9]+) kB") | .kb | tonumber * 1024] | first' "$f"
+fi | part memory_bytes
+
+# --- GPUs (PCI display controllers, class 03xx) -------------------------------
+
+if dv_have lspci pciutils && dv_source lspci --package pciutils -- lspci -vmm -nn -k -D &&
+  ((DV_RC == 0)); then
+  jq -Rs 'def nameid: if . == null then {name: null, id: null}
+      else (capture("^(?<name>.*?) ?\\[(?<id>[0-9a-fA-F]{4})\\]$") // {name: ., id: null}) end;
+    split("\n\n") | map(split("\n") | map(capture("^(?<k>[^:]+):\\t(?<v>.*)$"))
+      | reduce .[] as $p ({}; if $p.k == "Module" then .modules += [$p.v] else .[$p.k] = $p.v end))
+    | map(select(.Class // "" | test("\\[03[0-9a-fA-F]{2}\\]$")))
+    | map((.Class | nameid) as $c | (.Vendor | nameid) as $v | (.Device | nameid) as $d
+      | {slot: .Slot, class: $c.name, vendor: $v.name, vendor_id: $v.id,
+         device: $d.name, device_id: $d.id, driver: (.Driver // null), modules: (.modules // [])})' \
+    "$DV_OUT"
+else
+  # Without lspci: the IDs and the bound driver from sysfs, without names.
+  for d in "$(dv_path /sys/bus/pci/devices)"/*; do
+    cls=$(rd "$d/class") || continue
+    [[ $cls == 0x03* ]] || continue
+    vendor=$(rd "$d/vendor") || vendor=""
+    device=$(rd "$d/device") || device=""
+    drv=""
+    if [[ -L $d/driver ]]; then
+      drv=$(readlink -- "$d/driver") || drv=""
+      drv=${drv##*/}
+    fi
+    printf '%s\t%s\t%s\t%s\n' "${d##*/}" "${vendor#0x}" "${device#0x}" "$drv"
+  done | jq -Rn '[inputs | split("\t") | {slot: .[0], class: null, vendor: null,
+      vendor_id: (.[1] | if . == "" then null else . end), device: null,
+      device_id: (.[2] | if . == "" then null else . end),
+      driver: (.[3] | if . == "" then null else . end), modules: []}]'
+fi | part gpus
+
+# --- batteries ----------------------------------------------------------------
+
+# System batteries only: type Battery, not scope Device (a wireless mouse),
+# and present. Capacities are in µWh (energy_*) or µAh (charge_*).
+for b in "$(dv_path /sys/class/power_supply)"/*; do
+  [[ $(rd "$b/type") == Battery ]] || continue
+  [[ $(rd "$b/scope") == Device ]] && continue
+  [[ $(rd "$b/present") == 0 ]] && continue
+  unit="" full="" design=""
+  if full=$(rd "$b/energy_full") && design=$(rd "$b/energy_full_design"); then
+    unit=uWh
+  elif full=$(rd "$b/charge_full") && design=$(rd "$b/charge_full_design"); then
+    unit=uAh
+  else
+    full="" design=""
+  fi
+  status=$(rd "$b/status") || status=""
+  capacity=$(rd "$b/capacity") || capacity=""
+  cycles=$(rd "$b/cycle_count") || cycles=""
+  tech=$(rd "$b/technology") || tech=""
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${b##*/}" "$unit" "$design" "$full" "$status" \
+    "$capacity" "$cycles" "$tech"
+done | jq -Rn 'def n: tonumber? // null; def s: if . == "" then null else . end;
+  [inputs | split("\t") | (.[2] | n) as $design | (.[3] | n) as $full
+    | {name: .[0], unit: (.[1] | s), design: $design, full: $full,
+       health_percent: (if $design and $full and $design > 0 then ($full / $design * 1000 | round / 10) else null end),
+       capacity_percent: (.[5] | n), status: (.[4] | s), cycle_count: (.[6] | n), technology: (.[7] | s)}]
+  | if length == 0 then null else . end' | part battery
+
+# --- firmware and machine model (DMI) ----------------------------------------
+
+dmi=$(dv_path /sys/class/dmi/id)
+if [[ -d $dmi ]]; then
+  v() { rd "$dmi/$1" || true; }
+  jq -n --arg bv "$(v bios_vendor)" --arg bver "$(v bios_version)" \
+    --arg sv "$(v sys_vendor)" --arg pn "$(v product_name)" '
+    def s: sub("^\\s+"; "") | sub("\\s+$"; "") | if . == "" then null else . end;
+    {firmware: {vendor: ($bv | s), version: ($bver | s)}, machine: {vendor: ($sv | s), model: ($pn | s)}}
+    | map_values(if all(.[]; . == null) then null else . end)' >"$DV_TMP/dmi.json"
+else
+  dv_unavailable /sys/class/dmi/id missing
+  echo '{"firmware": null, "machine": null}' >"$DV_TMP/dmi.json"
+fi
+jq '.firmware' "$DV_TMP/dmi.json" | part firmware
+jq '.machine' "$DV_TMP/dmi.json" | part machine
+
+body=$DV_TMP/body.json
+jq -s 'add | {cpu, gpus, memory_bytes, battery, firmware, machine}' "$P"/*.json >"$body" ||
+  dv_die assemble "could not merge the collected facts"
+dv_emit "$body"

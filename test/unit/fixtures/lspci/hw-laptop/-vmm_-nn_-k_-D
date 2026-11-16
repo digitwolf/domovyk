@@ -1,0 +1,312 @@
+Slot:	0000:00:00.0
+Class:	Host bridge [0600]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake-P 6p+8e cores Host Bridge/DRAM Controller [a706]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+ProgIf:	00
+Driver:	igen6_edac
+Module:	igen6_edac
+IOMMUGroup:	2
+
+Slot:	0000:00:02.0
+Class:	VGA compatible controller [0300]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake-P [Iris Xe Graphics] [a7a0]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	04
+ProgIf:	00
+Driver:	i915
+Module:	i915
+Module:	xe
+IOMMUGroup:	1
+
+Slot:	0000:00:04.0
+Class:	Signal processing controller [1180]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake Dynamic Platform and Thermal Framework Processor Participant [a71d]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+ProgIf:	00
+Driver:	proc_thermal_pci
+Module:	processor_thermal_device_pci
+IOMMUGroup:	3
+
+Slot:	0000:00:05.0
+Class:	Multimedia controller [0480]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake IPU [a75d]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+ProgIf:	00
+Driver:	intel-ipu6
+Module:	intel_ipu6
+IOMMUGroup:	0
+
+Slot:	0000:00:06.0
+Class:	PCI bridge [0604]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake PCI Express 4.0 Graphics Port [a74d]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+ProgIf:	00
+Driver:	pcieport
+Module:	shpchp
+IOMMUGroup:	4
+
+Slot:	0000:00:07.0
+Class:	PCI bridge [0604]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake-P Thunderbolt 4 PCI Express Root Port #2 [a72f]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+ProgIf:	00
+Driver:	pcieport
+Module:	shpchp
+IOMMUGroup:	5
+
+Slot:	0000:00:07.3
+Class:	PCI bridge [0604]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake-P Thunderbolt 4 PCI Express Root Port #1 [a71f]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+ProgIf:	00
+Driver:	pcieport
+Module:	shpchp
+IOMMUGroup:	6
+
+Slot:	0000:00:08.0
+Class:	System peripheral [0880]
+Vendor:	Intel Corporation [8086]
+Device:	GNA Scoring Accelerator module [a74f]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+ProgIf:	00
+IOMMUGroup:	7
+
+Slot:	0000:00:0a.0
+Class:	Signal processing controller [1180]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake Crashlog and Telemetry [a77d]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	intel_vsec
+Module:	intel_vsec
+IOMMUGroup:	8
+
+Slot:	0000:00:0d.0
+Class:	USB controller [0c03]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake-P Thunderbolt 4 USB Controller [a71e]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+ProgIf:	30
+Driver:	xhci_hcd
+Module:	xhci_pci
+IOMMUGroup:	9
+
+Slot:	0000:00:0d.3
+Class:	USB controller [0c03]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake-P Thunderbolt 4 NHI #1 [a76d]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+ProgIf:	40
+Driver:	thunderbolt
+Module:	thunderbolt
+IOMMUGroup:	9
+
+Slot:	0000:00:12.0
+Class:	Serial controller [0700]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake-P Integrated Sensor Hub [51fc]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	intel_ish_ipc
+Module:	intel_ish_ipc
+IOMMUGroup:	10
+
+Slot:	0000:00:14.0
+Class:	USB controller [0c03]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake PCH USB 3.2 xHCI Host Controller [51ed]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	30
+Driver:	xhci_hcd
+Module:	xhci_pci
+IOMMUGroup:	11
+
+Slot:	0000:00:14.2
+Class:	RAM memory [0500]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake PCH Shared SRAM [51ef]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+IOMMUGroup:	11
+
+Slot:	0000:00:14.3
+Class:	Network controller [0280]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake PCH CNVi WiFi [51f1]
+SVendor:	Intel Corporation [8086]
+SDevice:	Wi-Fi 6E AX211 160MHz [4090]
+Rev:	01
+ProgIf:	00
+Driver:	iwlwifi
+Module:	iwlwifi
+IOMMUGroup:	12
+
+Slot:	0000:00:15.0
+Class:	Serial bus controller [0c80]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake PCH Serial IO I2C Controller #0 [51e8]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	intel-lpss
+Module:	intel_lpss_pci
+IOMMUGroup:	13
+
+Slot:	0000:00:15.1
+Class:	Serial bus controller [0c80]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake PCH Serial IO I2C Controller #1 [51e9]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	intel-lpss
+Module:	intel_lpss_pci
+IOMMUGroup:	13
+
+Slot:	0000:00:16.0
+Class:	Communication controller [0780]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake PCH HECI Controller [51e0]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	mei_me
+Module:	mei_me
+IOMMUGroup:	14
+
+Slot:	0000:00:16.3
+Class:	Serial controller [0700]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake AMT SOL Redirection [51e3]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	02
+Driver:	serial
+Module:	8250_pci
+IOMMUGroup:	14
+
+Slot:	0000:00:19.0
+Class:	Serial bus controller [0c80]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake-P Serial IO I2C Controller #0 [51c5]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	intel-lpss
+Module:	intel_lpss_pci
+IOMMUGroup:	15
+
+Slot:	0000:00:1e.0
+Class:	Communication controller [0780]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake PCH UART #0 [51a8]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	intel-lpss
+Module:	intel_lpss_pci
+IOMMUGroup:	16
+
+Slot:	0000:00:1e.3
+Class:	Serial bus controller [0c80]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake SPI Controller [51ab]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	intel-lpss
+Module:	intel_lpss_pci
+IOMMUGroup:	16
+
+Slot:	0000:00:1f.0
+Class:	ISA bridge [0601]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake LPC/eSPI Controller [519d]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+IOMMUGroup:	17
+
+Slot:	0000:00:1f.3
+Class:	Multimedia audio controller [0401]
+Vendor:	Intel Corporation [8086]
+Device:	Raptor Lake-P/U/H cAVS [51ca]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	sof-audio-pci-intel-tgl
+Module:	snd_soc_avs
+Module:	snd_sof_pci_intel_tgl
+Module:	snd_hda_intel
+IOMMUGroup:	17
+
+Slot:	0000:00:1f.4
+Class:	SMBus [0c05]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake PCH-P SMBus Host Controller [51a3]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	i801_smbus
+Module:	i2c_i801
+IOMMUGroup:	17
+
+Slot:	0000:00:1f.5
+Class:	Serial bus controller [0c80]
+Vendor:	Intel Corporation [8086]
+Device:	Alder Lake-P PCH SPI Controller [51a4]
+SVendor:	Dell [1028]
+SDevice:	Device [0c11]
+Rev:	01
+ProgIf:	00
+Driver:	intel-spi
+Module:	spi_intel_pci
+IOMMUGroup:	17
+
+Slot:	0000:01:00.0
+Class:	Non-Volatile memory controller [0108]
+Vendor:	KIOXIA Corporation [1e0f]
+Device:	NVMe SSD Controller XG8 [0010]
+SVendor:	KIOXIA Corporation [1e0f]
+SDevice:	Device [0001]
+Rev:	01
+ProgIf:	02
+Driver:	nvme
+Module:	nvme
+IOMMUGroup:	18
+
