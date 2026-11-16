@@ -1,0 +1,69 @@
+#!/bin/bash
+# domovyk:summary=Write a script for the owner to read and run with sudo (never runs it)
+# domovyk:tier=user
+# domovyk:args=--title <title>  (the script on stdin)
+# domovyk:examples=domovyk handoff create --title "Install the IPU6 camera driver" < script.sh
+# domovyk:needs-args=yes
+#
+# Writes a Handoff_Script to the Handoff_Dir with mode 0600 and prints its path
+# and the line to run it (requirement 15). This Command never executes, sources
+# or otherwise runs the script it writes (15.4).
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+# shellcheck source=../lib/handoff.sh
+source "$DOMOVYK_LIBEXEC/lib/handoff.sh"
+dv_init domovyk.handoff.v1 "" "$@"
+
+title=""
+set -- "${DV_ARGS[@]}"
+while (($#)); do
+  case $1 in
+  --title)
+    (($# >= 2)) || dv_usage "--title needs a value"
+    title=$2
+    shift 2
+    ;;
+  *) dv_usage "unexpected argument: $1" ;;
+  esac
+done
+[[ -n ${title//[[:space:]]/} ]] || dv_usage "--title is required"
+[[ $title != *$'\n'* ]] || dv_usage "the title must be one line"
+
+body=$DV_TMP/body.sh
+head -c 65537 >"$body"
+size=$(stat -c %s "$body")
+((size > 0)) || dv_usage "the script on stdin is empty"
+((size <= 65536)) || dv_usage "the script on stdin is longer than 64 KiB"
+[[ -n $(tr -d '[:space:]' <"$body") ]] || dv_usage "the script on stdin is empty"
+if ! errors=$(bash -n "$body" 2>&1); then
+  printf '%s\n' "$errors" >&2
+  dv_usage "the script on stdin does not parse (bash -n)"
+fi
+
+slug=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-40)
+slug=${slug%-}
+[[ -n $slug ]] || slug=handoff
+dir=$(dv_handoff_dir)
+umask 077
+mkdir -p "$dir"
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+file="$dir/$stamp-$slug.sh"
+n=1
+while [[ -e $file ]]; do
+  file="$dir/$stamp-$slug-$n.sh"
+  n=$((n + 1))
+done
+codename=$(sed -n 's/^VERSION_CODENAME=//p' "${DOMOVYK_OS_RELEASE:-/etc/os-release}" 2>/dev/null | tr -d '"')
+{
+  printf '#!/bin/bash\n'
+  printf 'set -euo pipefail\n'
+  printf '# domovyk handoff: %s\n' "$title"
+  printf '# created: %s by %s on %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(id -un)" "${codename:-unknown}"
+  printf '# Read it before running:  sudo bash %s\n' "$file"
+  printf '# --- body ---\n'
+  cat "$body"
+} >"$DV_TMP/script"
+install -m 0600 "$DV_TMP/script" "$file"
+printf '%s\n' "$file"
+printf '! sudo bash %s\n' "$file"

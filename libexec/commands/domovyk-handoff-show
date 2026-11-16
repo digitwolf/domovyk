@@ -1,0 +1,26 @@
+#!/bin/bash
+# domovyk:summary=Show one handoff script
+# domovyk:tier=read
+# domovyk:args=<name> [--json]
+# domovyk:examples=domovyk handoff show 20261115T210405Z-install-driver.sh
+# domovyk:needs-args=yes
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+# shellcheck source=../lib/handoff.sh
+source "$DOMOVYK_LIBEXEC/lib/handoff.sh"
+dv_init domovyk.handoff.v1 "" "$@"
+((${#DV_ARGS[@]} == 1)) || dv_usage "give one handoff name (see: domovyk handoff list)"
+name=${DV_ARGS[0]##*/}
+file="$(dv_handoff_dir)/$name"
+[[ -f $file ]] || {
+  printf 'domovyk handoff show: no handoff %s; see domovyk handoff list\n' "$name" >&2
+  exit 2
+}
+title=$(sed -n '1,6s/^# domovyk handoff: //p' "$file" | head -n 1)
+created=$(sed -n '1,6s/^# created: \([^ ]*\).*/\1/p' "$file" | head -n 1)
+jq -n --arg name "$name" --arg path "$file" --arg title "$title" --arg created "$created" \
+  --argjson size "$(stat -c %s "$file")" --rawfile content "$file" \
+  '{scripts: [{name: $name, path: $path, title: $title, created: $created, size: $size, content: $content}]}' \
+  >"$DV_TMP/body.json"
+dv_emit "$DV_TMP/body.json"

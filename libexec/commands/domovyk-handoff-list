@@ -1,0 +1,27 @@
+#!/bin/bash
+# domovyk:summary=List handoff scripts, newest first
+# domovyk:tier=read
+# domovyk:args=[--json]
+# domovyk:examples=domovyk handoff list | domovyk handoff
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+# shellcheck source=../lib/handoff.sh
+source "$DOMOVYK_LIBEXEC/lib/handoff.sh"
+dv_init domovyk.handoff.v1 "" "$@"
+((${#DV_ARGS[@]} == 0)) || dv_usage "unexpected argument: ${DV_ARGS[0]}"
+
+dir=$(dv_handoff_dir)
+{
+  if [[ -d $dir ]]; then
+    for f in "$dir"/*.sh; do
+      [[ -f $f ]] || continue
+      title=$(sed -n '1,6s/^# domovyk handoff: //p' "$f" | head -n 1)
+      created=$(sed -n '1,6s/^# created: \([^ ]*\).*/\1/p' "$f" | head -n 1)
+      jq -cn --arg name "${f##*/}" --arg path "$f" --arg title "$title" --arg created "$created" \
+        --argjson size "$(stat -c %s "$f")" \
+        '{name: $name, path: $path, title: $title, created: $created, size: $size}'
+    done
+  fi
+} | jq -s '{scripts: (sort_by(.name) | reverse)}' >"$DV_TMP/body.json"
+dv_emit "$DV_TMP/body.json"
