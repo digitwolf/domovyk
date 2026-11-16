@@ -79,7 +79,7 @@ present_routes() {
   fake_command crash-list read 'echo crash-list "$@"'
   fake_command handoff-list read 'echo handoff-list'
   run -0 "$DOMOVYK_ROOT/bin/domovyk" crash
-  assert_output 'crash-list '
+  assert_output 'crash-list'
   run -0 "$DOMOVYK_ROOT/bin/domovyk" handoff
   assert_output 'handoff-list'
 }

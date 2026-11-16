@@ -47,6 +47,7 @@ setup() {
 
 @test "a Read_Command with a broken rules file prints no Fact_Output (5.6)" {
   fake_tree
+  cp "$REPO/libexec/commands/domovyk-commands" "$FAKE_ROOT/libexec/commands/"
   printf 'broken\t(unclosed\n' >"$FAKE_ROOT/share/redact.tsv"
   run -1 --separate-stderr "$DOMOVYK_ROOT/bin/domovyk" commands --json
   assert_output ''

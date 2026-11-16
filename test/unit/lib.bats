@@ -99,7 +99,10 @@ exit 0'
   rm -f "$HOME/dir"
   "$DOMOVYK_ROOT/bin/domovyk" keep wait &
   local pid=$!
-  for _ in $(seq 50); do [[ -s $HOME/dir ]] && break; sleep 0.1; done
+  for _ in $(seq 50); do
+    [[ -s $HOME/dir ]] && break
+    sleep 0.1
+  done
   [[ -d $(cat "$HOME/dir") ]]
   kill -TERM "$pid"
   wait "$pid" || true
@@ -119,6 +122,7 @@ echo "{\"note\":\"password=hunter2\"}" >"$DV_TMP/b"; dv_emit "$DV_TMP/b"'
 }
 
 @test "the Facts_Cache stores redacted JSON with mode 0600 and expires after 60 s" {
+  printf '.note\n' >"$FAKE_ROOT/libexec/render/probe.jq"
   fake_command probe read 'source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
 dv_init domovyk.probe.v1 "" "$@"
 DV_CACHE_ROUTE=probe

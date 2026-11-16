@@ -16,7 +16,6 @@ DV_SCHEMA=""
 DV_RENDER=""
 DV_TMP=""
 DV_UNAVAIL=""
-DV_TMPDIRS=()
 DV_OUT="" DV_ERR="" DV_RC=0
 DV_ARGS=()
 DV_SYS=${DOMOVYK_SYSROOT:-}
@@ -25,10 +24,6 @@ DV_SYS=${DOMOVYK_SYSROOT:-}
 dv_path() { printf '%s%s' "$DV_SYS" "$1"; }
 
 dv_cleanup() {
-  local d
-  for d in "${DV_TMPDIRS[@]}"; do
-    [[ -n $d && -d $d ]] && rm -rf -- "$d"
-  done
   [[ -n $DV_TMP && -d $DV_TMP ]] && rm -rf -- "$DV_TMP"
   return 0
 }
@@ -48,9 +43,9 @@ dv_init() {
   local a
   for a in "$@"; do
     case $a in
-    --json) DOMOVYK_FORMAT=json ;;
-    --raw) DOMOVYK_RAW=1 ;;
-    *) DV_ARGS+=("$a") ;;
+      --json) DOMOVYK_FORMAT=json ;;
+      --raw) DOMOVYK_RAW=1 ;;
+      *) DV_ARGS+=("$a") ;;
     esac
   done
   DV_TMP=$(mktemp -d "${TMPDIR:-/tmp}/domovyk.XXXXXXXX")
@@ -110,16 +105,16 @@ dv_source() {
   shift
   while (($#)); do
     case $1 in
-    --timeout)
-      t=$2
-      shift 2
-      ;;
-    --package)
-      pkg=$2
-      shift 2
-      ;;
-    --) shift && break ;;
-    *) dv_die source "dv_source $name: bad option $1" ;;
+      --timeout)
+        t=$2
+        shift 2
+        ;;
+      --package)
+        pkg=$2
+        shift 2
+        ;;
+      --) shift && break ;;
+      *) dv_die source "dv_source $name: bad option $1" ;;
     esac
   done
   if ! command -v -- "$1" >/dev/null 2>&1; then
@@ -141,13 +136,13 @@ dv_source() {
   return 0
 }
 
-# dv_mktemp_dir: a private temporary directory, deleted on exit, interrupt
-# and termination (requirement 10.5).
+# dv_mktemp_dir: prints a private (0700) temporary directory, deleted on
+# exit, interrupt and termination (requirement 10.5). It lives inside DV_TMP,
+# so it is removed with it even when created from a $(...) subshell.
 dv_mktemp_dir() {
   local d
-  d=$(mktemp -d "${TMPDIR:-/tmp}/domovyk-work.XXXXXXXX")
+  d=$(mktemp -d "$DV_TMP/work.XXXXXXXX")
   chmod 0700 "$d"
-  DV_TMPDIRS+=("$d")
   printf '%s' "$d"
 }
 

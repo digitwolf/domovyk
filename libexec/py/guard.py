@@ -164,6 +164,52 @@ def substitutions(word):
     return bodies
 
 
+def raw_substitutions(command):
+    """Bodies of $(...), `...`, <(...) and >(...) in the raw command string.
+
+    Tokens split a backtick body that holds spaces, so substitutions are found
+    in the raw text too. Single-quoted text is skipped, as bash does not
+    expand it; double-quoted text is scanned, as bash expands it there.
+    """
+    bodies = []
+    i, n = 0, len(command)
+    in_double = False
+    while i < n:
+        c = command[i]
+        if c == "\\" and i + 1 < n:
+            i += 2
+            continue
+        if c == "'" and not in_double:
+            j = command.find("'", i + 1)
+            i = n if j < 0 else j + 1
+            continue
+        if c == '"':
+            in_double = not in_double
+            i += 1
+            continue
+        if c == "`":
+            j = i + 1
+            while j < n and command[j] != "`":
+                j += 2 if command[j] == "\\" else 1
+            bodies.append(command[i + 1 : j])
+            i = j + 1
+            continue
+        if (c == "$" or (c in "<>" and not in_double)) and command.startswith("(", i + 1) \
+                and not command.startswith("((", i + 1):
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if command[j] == "(":
+                    depth += 1
+                elif command[j] == ")":
+                    depth -= 1
+                j += 1
+            bodies.append(command[i + 2 : j - 1] if depth == 0 else command[i + 2 :])
+            i = j
+            continue
+        i += 1
+    return bodies
+
+
 def program_name(word):
     w = word.lstrip("\\`$(")
     return os.path.basename(w)
@@ -331,6 +377,8 @@ def analyse(command, depth, sink):
         raise Deny("domovyk guard: command nested too deeply to check")
     if FORK_BOMB.search(command):
         raise Deny("domovyk guard: fork-bomb")
+    for body in raw_substitutions(command):
+        analyse(body, depth + 1, sink)
     try:
         tokens = tokenize(command)
     except ValueError:

@@ -34,9 +34,9 @@ dv_release_check() {
   local file=${DOMOVYK_OS_RELEASE:-/etc/os-release} codename=""
   [[ -r $file ]] && codename=$(sed -n 's/^VERSION_CODENAME=//p' "$file" | tr -d '"')
   case $codename in
-  noble | resolute) ;;
-  *) printf 'domovyk: warning: %s is not a supported release (24.04 noble, 26.04 resolute)\n' \
-    "${codename:-an unknown system}" >&2 ;;
+    noble | resolute) ;;
+    *) printf 'domovyk: warning: %s is not a supported release (24.04 noble, 26.04 resolute)\n' \
+      "${codename:-an unknown system}" >&2 ;;
   esac
 }
 
@@ -129,11 +129,11 @@ main() {
     exit 2
   fi
   case $1 in
-  --version) set -- version ;;
-  --help | -h | help)
-    dv_top_help
-    exit 0
-    ;;
+    --version) set -- version ;;
+    --help | -h | help)
+      dv_top_help
+      exit 0
+      ;;
   esac
   dv_release_check
 

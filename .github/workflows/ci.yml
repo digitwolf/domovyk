@@ -19,10 +19,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install shellcheck
-        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck
-      - name: Lint
+      - name: Install shellcheck and shfmt
+        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck shfmt
+      - name: shellcheck
         run: make lint
+      - name: shfmt
+        run: make format-check
 
   unit:
     name: unit tests (Ubuntu ${{ matrix.release }})
@@ -41,5 +43,10 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
             bash ca-certificates coreutils git jq procps python3 systemd util-linux
       - uses: actions/checkout@v4
+      # Domovyk runs as a regular user, so the tests do too.
+      - name: Create a test user
+        run: |
+          useradd --create-home --shell /bin/bash tester
+          chown -R tester: "$GITHUB_WORKSPACE"
       - name: Unit and property tests
-        run: test/unit/run
+        run: su tester -c 'cd "$GITHUB_WORKSPACE" && test/unit/run'

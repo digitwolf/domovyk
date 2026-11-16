@@ -4,6 +4,7 @@
 #   sudo make install                    # for everyone, into /usr/local
 #   make uninstall PREFIX=...            # removes exactly what install put there
 #   make lint                            # shellcheck (safe to run anywhere)
+#   make format / format-check           # shfmt -i 2 -ci
 #   make test                            # lint, then unit tests in a throwaway VM
 #
 # The layout matches the Debian package: $(PREFIX)/bin/domovyk,
@@ -16,7 +17,7 @@ BINDIR := $(DESTDIR)$(PREFIX)/bin
 LIBEXECDIR := $(DESTDIR)$(PREFIX)/libexec/domovyk
 SHAREDIR := $(DESTDIR)$(PREFIX)/share/domovyk
 
-.PHONY: all install uninstall lint test help
+.PHONY: all install uninstall lint format format-check test help
 
 all: help
 
@@ -37,8 +38,18 @@ uninstall:
 	rm -rf "$(LIBEXECDIR)" "$(SHAREDIR)"
 	@echo "removed domovyk from $(DESTDIR)$(PREFIX)"
 
+SHELL_FILES = bin/domovyk libexec/lib/*.sh libexec/commands/* libexec/hooks/* tools/capture-fixtures \
+	test/unit/fixtures/bin/fake test/unit/helpers.bash test/unit/*.bats
+
 lint:
 	shellcheck -x -P SCRIPTDIR bin/domovyk libexec/lib/*.sh libexec/commands/* libexec/hooks/* tools/capture-fixtures
+
+# shfmt is not on a stock Ubuntu install; CI and the test VM have it.
+format:
+	shfmt -w -i 2 -ci $(SHELL_FILES)
+
+format-check:
+	shfmt -d -i 2 -ci $(SHELL_FILES)
 
 test:
 	test/run-all
