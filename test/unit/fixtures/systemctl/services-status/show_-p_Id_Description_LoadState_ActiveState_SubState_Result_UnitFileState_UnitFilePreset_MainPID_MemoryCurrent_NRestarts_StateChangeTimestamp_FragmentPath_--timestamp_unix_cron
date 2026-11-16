@@ -1,0 +1,13 @@
+Id=cron.service
+Description=Regular background program processing daemon
+LoadState=loaded
+ActiveState=active
+SubState=running
+FragmentPath=/usr/lib/systemd/system/cron.service
+UnitFileState=enabled
+UnitFilePreset=enabled
+StateChangeTimestamp=@1794372927
+MainPID=7749
+Result=success
+NRestarts=0
+MemoryCurrent=10620928

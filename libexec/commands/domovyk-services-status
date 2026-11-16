@@ -1,0 +1,139 @@
+#!/bin/bash
+# domovyk:summary=Show a unit's state, enablement, main PID, memory, restarts and journal
+# domovyk:tier=read
+# domovyk:args=<unit> [--user] [--json] [--raw]
+# domovyk:examples=domovyk services status ssh | domovyk services status pipewire --user --json
+# domovyk:needs-args=yes
+#
+# One unit (requirement 14.2), from systemctl show and the last 20 journal
+# lines. Without --user the system manager is asked first and the user
+# manager second. A unit neither manager knows is a usage error (exit 2).
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+dv_init domovyk.services-status.v1 "" "$@"
+
+unit="" want_user=0
+for a in "${DV_ARGS[@]}"; do
+  case $a in
+    --user) want_user=1 ;;
+    -*) dv_usage "unknown option: $a" ;;
+    *)
+      [[ -z $unit ]] || dv_usage "give one unit, not '$unit' and '$a'"
+      unit=$a
+      ;;
+  esac
+done
+[[ -n $unit ]] || dv_usage "which unit? usage: domovyk services status <unit> [--user]"
+name_re='^[-A-Za-z0-9:_.@\\]+$'
+[[ $unit =~ $name_re ]] || dv_usage "not a unit name: $unit"
+
+LINES=20
+FIELDS=MESSAGE,PRIORITY,SYSLOG_IDENTIFIER,_PID
+PROPS=Id,Description,LoadState,ActiveState,SubState,Result,UnitFileState,UnitFilePreset,MainPID,MemoryCurrent,NRestarts,StateChangeTimestamp,FragmentPath
+
+# All Sources together get at most BUDGET seconds, so that the command
+# finishes within 30 s even when several Sources hang (requirement 3.4).
+BUDGET=25
+t_left() {
+  local t=$DOMOVYK_TIMEOUT left=$((BUDGET - SECONDS))
+  ((left >= t)) || t=$left
+  ((t >= 1)) || t=1
+  printf '%s' "$t"
+}
+
+ENTRY='{time: ((.__REALTIME_TIMESTAMP | tonumber? // null) | if . then (. / 1000000 | floor | todate) else null end),
+  priority: (.PRIORITY | tonumber? // null), identifier: (.SYSLOG_IDENTIFIER // null),
+  pid: (._PID | tonumber? // null),
+  message: (.MESSAGE | if type == "array" then (try implode catch null) else . end)}'
+
+unreachable() {
+  grep -qE 'Failed to connect to (user scope )?bus|Failed to get D-Bus connection|No medium found|not been booted with systemd|DBUS_SESSION_BUS_ADDRESS|XDG_RUNTIME_DIR' "$1"
+}
+
+# show_unit <system|user> <out>: the unit's properties as a JSON object.
+# Fails, after recording the manager as unavailable, when it cannot be asked.
+asked=0
+show_unit() {
+  local scope=$1 out=$2 name=systemctl hint
+  local -a sc=(systemctl)
+  if [[ $scope == user ]]; then
+    sc+=(--user)
+    name="systemctl --user"
+  fi
+  dv_source "$name" --timeout "$(t_left)" --package systemd -- \
+    "${sc[@]}" show -p "$PROPS" --timestamp=unix "$unit" || return 1
+  if ((DV_RC != 0)); then
+    if unreachable "$DV_ERR"; then
+      hint="the system service manager is not reachable"
+      [[ $scope == user ]] && hint="no user service manager for this session"
+      dv_unavailable "$name" missing "" "$hint"
+      return 1
+    fi
+    printf 'domovyk %s: %s\n' "$(dv_route)" "$(head -n 1 "$DV_ERR")" >&2
+    exit 2
+  fi
+  asked=1
+  jq -Rs 'split("\n") | map(capture("^(?<key>[A-Za-z]+)=(?<value>.*)$")) | from_entries' \
+    "$DV_OUT" >"$out"
+}
+
+# known <props-file>: the manager has the unit loaded, or it is still active.
+known() {
+  jq -e '(.LoadState // "not-found") != "not-found" or ((.ActiveState // "inactive") | IN("inactive", "") | not)' \
+    "$1" >/dev/null
+}
+
+props=$DV_TMP/props.json scope=""
+if ! dv_have systemctl systemd; then
+  :
+elif ((!want_user)) && show_unit system "$props" && known "$props"; then
+  scope=system
+elif show_unit user "$props" && known "$props"; then
+  scope=user
+fi
+
+if [[ -z $scope ]]; then
+  if ((asked)); then
+    where="system or user manager"
+    ((want_user)) && where="user manager"
+    printf 'domovyk %s: no unit %s in the %s; see domovyk services\n' "$(dv_route)" "$unit" "$where" >&2
+    exit 2
+  fi
+  # Neither manager could be asked: report that and exit 0 (requirement 1.4).
+  echo '{"unit": null}' >"$DV_TMP/body.json"
+  dv_emit "$DV_TMP/body.json"
+  exit 0
+fi
+
+id=$(jq -r '.Id // empty' "$props")
+[[ -n $id ]] || id=$unit
+journal=$DV_TMP/journal.json
+echo null >"$journal"
+sel=(-u "$id")
+[[ $scope == user ]] && sel=(--user-unit "$id")
+if dv_source journalctl --timeout "$(t_left)" --package systemd -- \
+  journalctl "${sel[@]}" -n "$LINES" -o json --output-fields="$FIELDS" --no-pager; then
+  if [[ $scope == system ]] && grep -qE 'not seeing messages from other users|insufficient permissions' "$DV_ERR"; then
+    dv_unavailable system-journal permission "" "adm or systemd-journal group"
+  elif ((DV_RC == 0)); then
+    jq -cn "[inputs | $ENTRY]" "$DV_OUT" >"$journal" 2>/dev/null || echo null >"$journal"
+  fi
+fi
+
+jq -n --arg scope "$scope" --slurpfile p "$props" --slurpfile j "$journal" '
+  def nonempty: if . == null or . == "" then null else . end;
+  def num: nonempty | if . == null or . == "[not set]" or . == "infinity" or . == "18446744073709551615"
+    then null else (tonumber? // null) end;
+  def ts: nonempty | if . == null then null else (ltrimstr("@") | tonumber? // null)
+    | if . then todate else null end end;
+  $p[0] as $u
+  | {unit: {name: $u.Id, scope: $scope, description: ($u.Description | nonempty),
+      load: ($u.LoadState | nonempty), active: ($u.ActiveState | nonempty), sub: ($u.SubState | nonempty),
+      result: ($u.Result | nonempty), enablement: ($u.UnitFileState | nonempty),
+      preset: ($u.UnitFilePreset | nonempty),
+      main_pid: ($u.MainPID | num | if . == 0 then null else . end),
+      memory_bytes: ($u.MemoryCurrent | num), restarts: ($u.NRestarts | num),
+      since: ($u.StateChangeTimestamp | ts), fragment: ($u.FragmentPath | nonempty),
+      journal: $j[0]}}' >"$DV_TMP/body.json"
+dv_emit "$DV_TMP/body.json"

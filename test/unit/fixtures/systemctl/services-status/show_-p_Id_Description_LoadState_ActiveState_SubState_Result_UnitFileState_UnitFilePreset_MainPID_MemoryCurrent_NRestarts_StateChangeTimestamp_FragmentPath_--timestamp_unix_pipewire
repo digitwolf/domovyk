@@ -1,0 +1,13 @@
+Id=pipewire.service
+Description=pipewire.service
+LoadState=not-found
+ActiveState=inactive
+SubState=dead
+FragmentPath=
+UnitFileState=
+UnitFilePreset=
+StateChangeTimestamp=
+MainPID=0
+Result=success
+NRestarts=0
+MemoryCurrent=[not set]

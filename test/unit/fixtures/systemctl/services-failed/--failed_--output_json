@@ -1,0 +1,1 @@
+[{"unit":"apport-autoreport.service","load":"loaded","active":"failed","sub":"failed","description":"Process error reports when automatic reporting is enabled"},{"unit":"fwupd-refresh.service","load":"loaded","active":"failed","sub":"failed","description":"Refresh fwupd metadata and update motd"}]

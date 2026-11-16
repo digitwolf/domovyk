@@ -1,0 +1,13 @@
+Id=apport-autoreport.service
+Description=Process error reports when automatic reporting is enabled
+LoadState=loaded
+ActiveState=failed
+SubState=failed
+FragmentPath=/usr/lib/systemd/system/apport-autoreport.service
+UnitFileState=static
+UnitFilePreset=enabled
+StateChangeTimestamp=@1794794436
+MainPID=0
+Result=exit-code
+NRestarts=0
+MemoryCurrent=[not set]

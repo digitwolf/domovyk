@@ -1,0 +1,13 @@
+Id=pipewire.service
+Description=PipeWire Multimedia Service
+LoadState=loaded
+ActiveState=active
+SubState=running
+FragmentPath=/usr/lib/systemd/user/pipewire.service
+UnitFileState=enabled
+UnitFilePreset=enabled
+StateChangeTimestamp=@1794372935
+MainPID=11387
+Result=success
+NRestarts=0
+MemoryCurrent=7880704

@@ -1,0 +1,157 @@
+#!/bin/bash
+# domovyk:summary=List failed system and user units with their result and journal tail
+# domovyk:tier=read
+# domovyk:args=[--json] [--raw]
+# domovyk:examples=domovyk services | domovyk services --json | domovyk services status <unit>
+#
+# Failed units (requirement 14.1): systemctl --failed for the system and the
+# user manager, the Result of each unit from systemctl show, and the last 10
+# journal lines of each unit (journalctl -u, or --user-unit for user units).
+set -euo pipefail
+# shellcheck source=../lib/domovyk.sh
+source "$DOMOVYK_LIBEXEC/lib/domovyk.sh"
+dv_init domovyk.services.v1 "" "$@"
+((${#DV_ARGS[@]} == 0)) || dv_usage "unexpected argument: ${DV_ARGS[0]}"
+
+LINES_PER_UNIT=10
+FIELDS=MESSAGE,PRIORITY,SYSLOG_IDENTIFIER,_PID
+# Journal tails are skipped once this many seconds have passed, so that the
+# command finishes within 30 s however many units failed (requirement 3.4).
+JOURNAL_BUDGET=20
+journal_off=0 journal_denied=0
+# All Sources together get at most BUDGET seconds, so that the command
+# finishes within 30 s even when several Sources hang (requirement 3.4).
+BUDGET=25
+t_left() {
+  local t=$DOMOVYK_TIMEOUT left=$((BUDGET - SECONDS))
+  ((left >= t)) || t=$left
+  ((t >= 1)) || t=1
+  printf '%s' "$t"
+}
+
+# One journal entry, from journalctl -o json. A MESSAGE that is not valid
+# UTF-8 arrives as an array of bytes.
+ENTRY='{time: ((.__REALTIME_TIMESTAMP | tonumber? // null) | if . then (. / 1000000 | floor | todate) else null end),
+  priority: (.PRIORITY | tonumber? // null), identifier: (.SYSLOG_IDENTIFIER // null),
+  pid: (._PID | tonumber? // null),
+  message: (.MESSAGE | if type == "array" then (try implode catch null) else . end)}'
+
+# unreachable <stderr-file>: the service manager could not be asked at all.
+unreachable() {
+  grep -qE 'Failed to connect to (user scope )?bus|Failed to get D-Bus connection|No medium found|not been booted with systemd|DBUS_SESSION_BUS_ADDRESS|XDG_RUNTIME_DIR' "$1"
+}
+
+# manager_unavailable <scope> <source-name> <stderr-file>
+manager_unavailable() {
+  local hint
+  if [[ $1 == user ]]; then
+    hint="no user service manager for this session"
+  else
+    hint="the system service manager is not reachable"
+  fi
+  unreachable "$3" || hint="systemctl failed: $(head -n 1 "$3")"
+  dv_unavailable "$2" missing "" "$hint"
+}
+
+# journal_tail <scope> <unit> <out>: the unit's last journal lines as a JSON
+# array, or null when the journal could not be read for it.
+journal_tail() {
+  local scope=$1 unit=$2 out=$3
+  local -a sel=(-u "$unit")
+  [[ $scope == user ]] && sel=(--user-unit "$unit")
+  echo null >"$out"
+  ((journal_off == 0)) || return 0
+  if ((SECONDS >= JOURNAL_BUDGET)); then
+    dv_unavailable journalctl timeout systemd "journal lines skipped to finish within 30 s"
+    journal_off=1
+    return 0
+  fi
+  if ! dv_source journalctl --timeout "$(t_left)" --package systemd -- \
+    journalctl "${sel[@]}" -n "$LINES_PER_UNIT" -o json --output-fields="$FIELDS" --no-pager; then
+    journal_off=1
+    return 0
+  fi
+  # Without the adm or systemd-journal group, the system journal shows only
+  # the user's own entries.
+  if [[ $scope == system ]] && grep -qE 'not seeing messages from other users|insufficient permissions' "$DV_ERR"; then
+    if ((journal_denied == 0)); then
+      dv_unavailable system-journal permission "" "adm or systemd-journal group"
+    fi
+    journal_denied=1
+    return 0
+  fi
+  ((DV_RC == 0)) || return 0
+  jq -cn "[inputs | $ENTRY]" "$DV_OUT" >"$out" 2>/dev/null || echo null >"$out"
+}
+
+# failed_units <system|user> <out>: the manager's failed units as a JSON
+# array, or null when that manager could not be asked.
+failed_units() {
+  local scope=$1 out=$2 name=systemctl list=$DV_TMP/list.$1.json show=$DV_TMP/show.$1.txt
+  local -a sc=(systemctl) units=()
+  if [[ $scope == user ]]; then
+    sc+=(--user)
+    name="systemctl --user"
+  fi
+  echo null >"$out"
+  dv_source "$name" --timeout "$(t_left)" --package systemd -- \
+    "${sc[@]}" --failed --output=json || return 0
+  if ((DV_RC == 0)) && jq -e 'type == "array"' "$DV_OUT" >/dev/null 2>&1; then
+    jq -c 'map({unit, load, active, sub, description})' "$DV_OUT" >"$list"
+  elif ((DV_RC != 0)) && unreachable "$DV_ERR"; then
+    manager_unavailable "$scope" "$name" "$DV_ERR"
+    return 0
+  else
+    # A systemctl without JSON tables prints its plain table for --output=json.
+    dv_source "$name" --timeout "$(t_left)" --package systemd -- \
+      "${sc[@]}" list-units --failed --plain --no-legend --full || return 0
+    if ((DV_RC != 0)); then
+      manager_unavailable "$scope" "$name" "$DV_ERR"
+      return 0
+    fi
+    jq -Rn '[inputs | capture("^\\s*(● )?(?<unit>\\S+)\\s+(?<load>\\S+)\\s+(?<active>\\S+)\\s+(?<sub>\\S+)\\s*(?<description>.*)$")
+      | {unit, load, active, sub, description}]' "$DV_OUT" >"$list"
+  fi
+
+  mapfile -t units < <(jq -r '.[].unit' "$list")
+  : >"$show"
+  if ((${#units[@]})) &&
+    dv_source "$name" --timeout "$(t_left)" --package systemd -- \
+      "${sc[@]}" show -p Id,Result,StateChangeTimestamp --timestamp=unix "${units[@]}" &&
+    ((DV_RC == 0)); then
+    cp "$DV_OUT" "$show"
+  fi
+
+  local i journals=$DV_TMP/journals.$scope.jsonl
+  : >"$journals"
+  for i in "${!units[@]}"; do
+    journal_tail "$scope" "${units[$i]}" "$DV_TMP/j.$scope.$i.json"
+    cat "$DV_TMP/j.$scope.$i.json" >>"$journals"
+  done
+
+  jq -n --slurpfile list "$list" --rawfile show "$show" --slurpfile j "$journals" '
+    def nonempty: if . == null or . == "" then null else . end;
+    def ts: nonempty | if . == null then null else (ltrimstr("@") | tonumber? // null)
+      | if . then todate else null end end;
+    ($show | split("\n\n") | map(split("\n") | map(capture("^(?<key>[A-Za-z]+)=(?<value>.*)$"))
+      | from_entries) | map(select(.Id))) as $p
+    | ($p | map({key: .Id, value: .}) | from_entries) as $byid
+    | $list[0] as $l
+    | [$l | to_entries[] | .key as $i | .value as $u
+       | (if ($p | length) == ($l | length) then $p[$i] else $byid[$u.unit] end) as $s
+       | $u + {result: ($s.Result | nonempty), since: ($s.StateChangeTimestamp | ts),
+               journal: $j[$i]}]' >"$out"
+}
+
+if dv_have systemctl systemd; then
+  failed_units system "$DV_TMP/system.json"
+  failed_units user "$DV_TMP/user.json"
+else
+  echo null >"$DV_TMP/system.json"
+  echo null >"$DV_TMP/user.json"
+fi
+
+body=$DV_TMP/body.json
+jq -n --slurpfile s "$DV_TMP/system.json" --slurpfile u "$DV_TMP/user.json" \
+  '{failed_system: $s[0], failed_user: $u[0]}' >"$body"
+dv_emit "$body"
