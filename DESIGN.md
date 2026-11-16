@@ -120,7 +120,7 @@ The only privileged entry point is `/usr/libexec/domovyk/helper`, run as
   the polkit agent.
 - **Anything outside the list** becomes a handoff. The agent writes a script to
   `~/.local/state/domovyk/handoff/<time>-<slug>.sh` and shows it. The owner reads it and
-  runs `! sudo bash <path>`. This matches how privileged work is done on this machine today.
+  runs it (in Claude Code: `! sudo bash <path>`).
 
 ### 3. Ledger and undo
 
@@ -136,7 +136,7 @@ updates, cleanups, and `snap refresh` only as far as `snap revert` goes. Those r
 so, and their plan warns before they run.
 
 Optional, later: an LVM snapshot before driver, kernel and release-upgrade actions when
-the volume group has free extents. This machine has ext4 on LVM.
+the volume group has free extents (Ubuntu's default encrypted install uses LVM).
 
 ### 4. Skills
 
@@ -251,24 +251,24 @@ Whatever the agent reads goes to Anthropic as conversation context. Therefore:
 - the checkup never calls the model on its own. A headless summary through `claude -p`
   is opt-in.
 
-## Worked examples (from this machine, 2026-11-15)
+## Worked examples
 
-- **"My webcam doesn't work."** `domovyk drivers` shows the Intel IPU6 camera with no
-  driver bound and `intel-ipu6-dkms` offered by `ubuntu-drivers`. Secure Boot is off, so
-  there is no MOK step. `driver-install intel-ipu6-dkms --plan` shows the apt simulation
-  and the DKMS build. After a yes, the polkit dialog appears, a ledger entry is written,
-  and the agent asks for a reboot and a re-check afterwards.
-- **"Why did the SDK Manager crash?"** `/var/crash` has
-  `_opt_nvidia_sdkmanager_sdkmanager-gui.1000.crash` (15:00) and a `mpris-proxy` crash
-  (Nov 10). diagnose-crash unpacks the first into a temporary directory and symbolizes
-  what it can. That will be little for a vendor binary in `/opt`, and the report says so.
-  It also checks for an OOM kill and for apt changes around 15:00.
+- **"My webcam doesn't work."** On many recent laptops the camera sits behind an Intel IPU6.
+  `domovyk drivers` shows the camera with no driver bound and `intel-ipu6-dkms` offered by
+  `ubuntu-drivers`. Secure Boot is off, so there is no MOK step. The agent writes a handoff
+  that installs the package and rebuilds the DKMS module, the owner runs it, and the agent
+  asks for a reboot and a re-check afterwards. (Phase 2 replaces the handoff with
+  `driver-install intel-ipu6-dkms --plan` and a polkit dialog.)
+- **"Why did that app crash?"** `/var/crash` holds a `.crash` file for a vendor app under
+  `/opt`. diagnose-crash unpacks it into a temporary directory and symbolizes what it can.
+  That will be little for a vendor binary, and the report says so. It also checks for an
+  OOM kill and for apt changes around the time of the crash.
 - **"Restart required" since an update.** `domovyk updates` reads
   `/run/reboot-required.pkgs` and says which packages need the reboot and since when,
-  along with 2 pending apt and 2 pending snap updates.
-- **"Clean up disk."** The root filesystem is 70 % of 1.9 T. The journal holds 1.2 G.
-  The breakdown ranks the journal, snap revisions, the apt cache and Docker, and each
-  category is cleaned only after its own plan is approved.
+  along with the pending apt and snap updates.
+- **"Clean up disk."** The breakdown ranks the journal, old snap revisions, the apt cache,
+  old kernels and Docker by reclaimable size and risk. Each category is cleaned only after
+  its own plan is approved.
 
 ## Packaging
 
@@ -343,13 +343,13 @@ read-tier commands from the working tree on the development host (decision 4).
 
 ## Decisions
 
-Approved by the owner on 2026-11-15:
+Approved by the maintainer on 2026-11-15:
 
 1. **Name:** Domovyk.
 2. **Permission mode for `domovyk agent`:** `default`, with the read-tier allow-list, and
    `auto` as an opt-in setting. The mode is passed as a flag, because `auto` cannot come
    from project settings.
-3. **Repository:** its own repo (`~/digitwolf/domovyk`), publishing to chumak. The VM
+3. **Repository:** its own repo (<https://github.com/digitwolf/domovyk>), publishing to chumak. The VM
    harness is ported from Motanka, and base images can be shared with it.
 
 Taken while writing the spec (2026-11-15). Flag them if revisited:

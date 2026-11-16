@@ -1,0 +1,38 @@
+name: Bug report
+description: A command printed something wrong, failed, or the agent did something it should not
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Security problems (a way past the guard or the redactor) go to
+        **Security → Report a vulnerability** instead, please.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you ran or asked, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: |
+        The command and its output. `--json` output helps most. Domovyk redacts secrets, but
+        please check for hostnames, user names and serial numbers before posting.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: domovyk version
+      description: Output of `domovyk version`
+    validations:
+      required: true
+  - type: dropdown
+    id: release
+    attributes:
+      label: Ubuntu release
+      options: ["26.04 LTS", "24.04 LTS", "other"]
+    validations:
+      required: true

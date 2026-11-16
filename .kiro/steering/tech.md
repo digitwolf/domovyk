@@ -12,4 +12,4 @@ inclusion: always
 - **Logging:** systemd journal, identifier `domovyk` (`logger -t domovyk`). No log files.
 - **Data files:** line-oriented TSV for the User_Ledger. Redaction rules live in `share/redact.tsv`.
 - **Style:** `shfmt -i 2 -ci` and `shellcheck` clean. Quote associative-array subscripts that contain `-` or `/`, because shfmt otherwise rewrites them as arithmetic.
-- **Commits:** Conventional Commits v1.0.0, no attribution trailers. Nothing is pushed without the owner's OK.
+- **Commits:** Conventional Commits v1.0.0, no attribution trailers. Changes land on `main` through pull requests that pass CI (`.github/workflows/ci.yml`).

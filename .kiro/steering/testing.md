@@ -4,7 +4,7 @@ inclusion: always
 
 # Testing: virtual machines only
 
-The development host is the owner's daily-use Ubuntu 26.04 laptop, with encrypted LVM and personal data. Domovyk is not installed, set up or tested on it until the owner decides to install a release.
+Your development machine is somebody's daily-use computer, with personal data. Domovyk is never installed, set up or tested on it during development: tests run in throwaway QEMU/KVM virtual machines started by `test/vm/`, or on CI runners, which are virtual machines too.
 
 ## Hard rules
 

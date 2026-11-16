@@ -476,7 +476,7 @@ Ported from Motanka at `d076748`:
 
 **Finding:** `{"id": "reboot-pending", "severity": "warning", "title": "…", "evidence": ["…"], "suggestion": "domovyk updates"}`.
 
-**Crash_Record (list item):** `{"id": "c1763218800-48213", "time": "…", "program": "sdkmanager-gui", "exe": "/opt/…", "signal": "SIGSEGV", "uid": 1000, "sources": ["apport"], "core": true, "readable": true}`.
+**Crash_Record (list item):** `{"id": "c1763218800-48213", "time": "…", "program": "example-app", "exe": "/opt/example/app", "signal": "SIGSEGV", "uid": 1000, "sources": ["apport"], "core": true, "readable": true}`.
 
 **Redaction_Rule:** `name<TAB>pattern<TAB>flags`. Lines starting with `#` are comments.
 

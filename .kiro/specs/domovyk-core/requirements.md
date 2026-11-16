@@ -398,7 +398,7 @@ Out of scope for this spec:
 
 ### Requirement 23: Test isolation
 
-**User Story:** As the owner, I want all development testing confined to throwaway VMs, so that my daily laptop is never changed by Domovyk's development.
+**User Story:** As a contributor, I want all development testing confined to throwaway VMs, so that my own machine is never changed by Domovyk's development.
 
 #### Acceptance Criteria
 

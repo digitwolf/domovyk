@@ -1,0 +1,21 @@
+name: Idea or feature request
+description: Something Domovyk should know, show or help with
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve?
+      description: The situation on your machine, and what you or the agent could not do.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: A command, a fact a command should report, a skill, a doctor check…
+  - type: textarea
+    id: ubuntu
+    attributes:
+      label: How would an experienced Ubuntu admin handle it today?
+      description: The commands or files involved. This is often the whole design.

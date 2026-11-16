@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: shellcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck
+      - name: Lint
+        run: make lint
+
+  unit:
+    name: unit tests (Ubuntu ${{ matrix.release }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ["24.04", "26.04"]
+    # GitHub's runners are virtual machines, and each job runs in a fresh
+    # container on top: nothing here touches a contributor's computer.
+    container: ubuntu:${{ matrix.release }}
+    steps:
+      - name: Install test dependencies
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            bash ca-certificates coreutils git jq procps python3 systemd util-linux
+      - uses: actions/checkout@v4
+      - name: Unit and property tests
+        run: test/unit/run
